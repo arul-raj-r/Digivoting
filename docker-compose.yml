@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    image: python:3.11-slim
+    container_name: digivote-backend
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+             python manage.py migrate &&
+             python seed.py &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-t(d^98mvl)keszoh0_j@)(%23s@36hbf61ph=9u=9dzo6kr28b
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+
+  frontend:
+    image: node:24-alpine
+    container_name: digivote-frontend
+    command: >
+      sh -c "npm install &&
+             npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./frontend:/app
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+

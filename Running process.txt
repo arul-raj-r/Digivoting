@@ -1,0 +1,37 @@
+Backend
+
+# 1. Navigate to the backend directory
+cd backend
+
+# 2. Activate the pre-configured Python virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Note: If PowerShell gives a script execution policy error, run:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+# Then try .\venv\Scripts\Activate.ps1 again.
+
+# 3. Install/ensure dependencies are installed
+pip install -r requirements.txt
+
+# 4. Set up the local SQLite database structures
+python manage.py migrate
+
+# 5. Populate the database with the default admin and voter accounts
+python seed.py
+
+# 6. Start the backend server
+python manage.py runserver
+
+
+
+
+Frontend
+
+# 1. Navigate to the frontend directory
+cd D:\DigiVoting\frontend
+
+# 2. Install the node packages
+npm install
+
+# 3. Start the Vite React development server
+npm run dev

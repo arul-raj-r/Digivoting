@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gov-blue: #0b3152; /* ECI Deep Navy Blue */
+  --color-gov-darkblue: #072036;
+  --color-gov-saffron: #f37021; /* ECI Saffron */
+  --color-gov-green: #0b7538; /* ECI Green */
+  --color-gov-gold: #f37021; /* Fallback mapping for gold to saffron */
+  --color-gov-slate: #328CC1;
+  --color-gov-light: #F8FAFC;
+  --color-gov-dark: #0F172A;
+  --color-gov-cardLight: #FFFFFF;
+  --color-gov-cardDark: #1E293B;
+}
+
+@layer base {
+  body {
+    @apply bg-gov-light text-slate-800 transition-colors duration-200 antialiased font-sans;
+  }
+
+  body.dark {
+    @apply bg-gov-dark text-slate-100;
+  }
+}
+
+/* Accessibility high-contrast focus rings */
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  @apply outline-none ring-2 ring-gov-blue ring-offset-2;
+}
+
+body.dark input:focus, body.dark select:focus, body.dark textarea:focus, body.dark button:focus-visible {
+  @apply ring-gov-gold ring-offset-slate-900;
+}
