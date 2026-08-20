@@ -41,3 +41,18 @@ node_modules/
 
 # Database
 *.sqlite3
+
+backend/.env
+.env
+.env.*
+!.env.example
+
+backend/.env
+.env
+.env.*
+!.env.example
+
+venv/
+__pycache__/
+*.pyc
+node_modules/

@@ -1,0 +1,19 @@
+# Environment variables
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# Keep example environment files
+!.env.example
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
