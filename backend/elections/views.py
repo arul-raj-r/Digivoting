@@ -9,10 +9,12 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIV
 
 from authentication.permissions import IsAdmin, IsVoter
 from authentication.utils import log_event
-from authentication.models import AuditLog
-from voters.models import Voter, Constituency
-from elections.models import Election, Candidate, VoteReceipt, Vote
-from elections.serializers import ElectionSerializer, CandidateSerializer, CandidateCreateSerializer
+from audit.models import AuditLog
+from voters.models import VoterProfile, Constituency
+from elections.models import Election
+from candidates.models import Candidate, ElectionCandidate, PoliticalParty
+from voting.models import VoteReceipt, Vote, VoteTransaction
+from elections.serializers import ElectionSerializer, ElectionCandidateSerializer, CandidateSerializer
 
 class ElectionListCreateView(ListCreateAPIView):
     queryset = Election.objects.all().order_by('-created_at')
@@ -48,14 +50,14 @@ class VoterElectionsListView(APIView):
         # Voter gets elections with voting eligibility metadata
         try:
             voter = user.voter_profile
-        except Voter.DoesNotExist:
+        except VoterProfile.DoesNotExist:
             return Response(
                 {"error": "Voter profile not found."},
                 status=status.HTTP_403_FORBIDDEN
             )
             
         # Only show SCHEDULED, ACTIVE, COMPLETED to voters
-        elections = Election.objects.exclude(status=Election.DRAFT).order_by('-start_date')
+        elections = Election.objects.exclude(status='DRAFT').order_by('-start_datetime')
         
         data = []
         for election in elections:
@@ -67,7 +69,7 @@ class VoterElectionsListView(APIView):
             election_info['receipt_number'] = receipt.receipt_number if receipt else None
             
             # Additional helper info for front-end
-            election_info['is_verified_voter'] = voter.is_verified
+            election_info['is_verified_voter'] = voter.verification_status == 'VERIFIED'
             
             data.append(election_info)
             
@@ -84,44 +86,66 @@ class CandidateListCreateView(APIView):
         user = request.user
         election_id = request.query_params.get('election_id')
         
-        candidates = Candidate.objects.all().order_by('name')
+        # Return registered contesters mapped through ElectionCandidate relation
+        query = ElectionCandidate.objects.filter(is_approved=True)
         if election_id:
-            candidates = candidates.filter(election_id=election_id)
+            query = query.filter(election_id=election_id)
             
-        # If user is voter, filter candidates to match voter constituency and only show approved
+        # If user is voter, filter candidates to match voter constituency
         if user.role == 'VOTER':
             try:
                 voter = user.voter_profile
-                candidates = candidates.filter(
-                    constituency=voter.constituency,
-                    is_approved=True
-                )
-            except Voter.DoesNotExist:
+                query = query.filter(constituency=voter.constituency)
+            except VoterProfile.DoesNotExist:
                 return Response(
                     {"error": "Voter profile required."},
                     status=status.HTTP_403_FORBIDDEN
                 )
         
-        serializer = CandidateSerializer(candidates, many=True)
+        serializer = ElectionCandidateSerializer(query, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = CandidateCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        candidate = serializer.save()
-        
+        # Admin can add a candidate to an election
+        election_id = request.data.get('election_id')
+        candidate_id = request.data.get('candidate_id')
+        constituency_id = request.data.get('constituency_id')
+
+        if not all([election_id, candidate_id, constituency_id]):
+            return Response(
+                {"error": "election_id, candidate_id and constituency_id are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            election = Election.objects.get(pk=election_id)
+            candidate = Candidate.objects.get(pk=candidate_id)
+            constituency = Constituency.objects.get(pk=constituency_id)
+        except (Election.DoesNotExist, Candidate.DoesNotExist, Constituency.DoesNotExist):
+            return Response(
+                {"error": "Electoral entities not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        elec_cand, created = ElectionCandidate.objects.get_or_create(
+            election=election,
+            candidate=candidate,
+            constituency=constituency,
+            defaults={'is_approved': True}
+        )
+
         log_event(
             request.user,
             'CANDIDATE_CREATION',
             request,
-            {'candidate_id': str(candidate.id), 'candidate_name': candidate.name}
+            {'candidate_id': str(candidate.id), 'election_id': str(election.id)}
         )
-        return Response(CandidateSerializer(candidate).data, status=status.HTTP_201_CREATED)
+        return Response(ElectionCandidateSerializer(elec_cand).data, status=status.HTTP_201_CREATED)
 
 
 class CandidateDetailView(RetrieveUpdateDestroyAPIView):
-    queryset = Candidate.objects.all()
-    serializer_class = CandidateSerializer
+    queryset = ElectionCandidate.objects.all()
+    serializer_class = ElectionCandidateSerializer
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -134,24 +158,24 @@ class ApproveCandidateView(APIView):
 
     def post(self, request, pk):
         try:
-            candidate = Candidate.objects.get(pk=pk)
-        except Candidate.DoesNotExist:
+            cand = ElectionCandidate.objects.get(pk=pk)
+        except ElectionCandidate.DoesNotExist:
             return Response(
-                {"error": "Candidate not found."},
+                {"error": "Election candidate mapping not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
             
-        candidate.is_approved = True
-        candidate.save()
+        cand.is_approved = True
+        cand.save()
         
         log_event(
             request.user,
             'CANDIDATE_APPROVAL',
             request,
-            {'candidate_id': str(candidate.id), 'candidate_name': candidate.name}
+            {'candidate_id': str(cand.candidate.id), 'election_candidate_id': str(cand.id)}
         )
         
-        return Response(CandidateSerializer(candidate).data, status=status.HTTP_200_OK)
+        return Response(ElectionCandidateSerializer(cand).data, status=status.HTTP_200_OK)
 
 
 class VoteCastView(APIView):
@@ -159,40 +183,41 @@ class VoteCastView(APIView):
 
     def post(self, request):
         candidate_id = request.data.get('candidate_id')
-        if not candidate_id:
+        election_id = request.data.get('election_id')
+        
+        if not candidate_id or not election_id:
             return Response(
-                {"error": "Candidate ID is required."},
+                {"error": "Candidate ID and Election ID are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         try:
+            election = Election.objects.get(pk=election_id)
             candidate = Candidate.objects.get(pk=candidate_id)
-        except Candidate.DoesNotExist:
+        except (Election.DoesNotExist, Candidate.DoesNotExist):
             return Response(
-                {"error": "Candidate not found."},
+                {"error": "Electoral records not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
             
-        election = candidate.election
-        
         # 1. Verify Voter Profile
         try:
             voter = request.user.voter_profile
-        except Voter.DoesNotExist:
+        except VoterProfile.DoesNotExist:
             return Response(
                 {"error": "Voter profile not found."},
                 status=status.HTTP_403_FORBIDDEN
             )
             
         # 2. Check if verified
-        if not voter.is_verified:
+        if voter.verification_status != 'VERIFIED':
             return Response(
                 {"error": "Your voter account has not been verified by an administrator. You cannot vote yet."},
                 status=status.HTTP_403_FORBIDDEN
             )
             
         # 3. Check election status
-        if election.status != Election.ACTIVE:
+        if election.status != 'ACTIVE':
             return Response(
                 {"error": f"Voting is not open for this election. Current status: {election.status}"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -200,23 +225,23 @@ class VoteCastView(APIView):
             
         # 4. Check date bounds
         now = timezone.now()
-        if now < election.start_date or now > election.end_date:
+        if now < election.start_datetime or now > election.end_datetime:
             return Response(
                 {"error": "This election is either closed or has not started yet."},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # 5. Check candidate approval status
-        if not candidate.is_approved:
-            return Response(
-                {"error": "This candidate is not approved for this election."},
-                status=status.HTTP_400_BAD_REQUEST
+        # 5. Check constituency eligibility through ElectionCandidate mapping
+        try:
+            elec_cand = ElectionCandidate.objects.get(
+                election=election,
+                candidate=candidate,
+                constituency=voter.constituency,
+                is_approved=True
             )
-            
-        # 6. Check voter constituency match
-        if voter.constituency != candidate.constituency:
+        except ElectionCandidate.DoesNotExist:
             return Response(
-                {"error": "Constituency mismatch. You cannot vote for a candidate outside your constituency."},
+                {"error": "This candidate is not contesting in your constituency for this election."},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -241,11 +266,17 @@ class VoteCastView(APIView):
                     receipt_number=receipt_hash
                 )
                 
-                # Record Vote (linked ONLY to election, candidate and constituency - completely detached from voter)
-                vote = Vote.objects.create(
+                # Record anonymous Vote (linked ONLY to election, candidate and constituency - completely detached from voter)
+                Vote.objects.create(
                     election=election,
                     constituency=voter.constituency,
                     candidate=candidate
+                )
+
+                # Record vote transaction audit hash
+                VoteTransaction.objects.create(
+                    election=election,
+                    transaction_hash=receipt_hash
                 )
                 
                 # Audit log - logs who voted in what election, but NEVER the candidate choice
@@ -274,7 +305,7 @@ class VoteCastView(APIView):
             "message": "Your vote has been cast successfully.",
             "receipt_number": receipt_hash,
             "timestamp": receipt.timestamp,
-            "election_title": election.title
+            "election_name": election.name
         }, status=status.HTTP_201_CREATED)
 
 
@@ -291,22 +322,22 @@ class ElectionResultsView(APIView):
             )
             
         total_votes_cast = Vote.objects.filter(election=election).count()
-        total_verified_voters = Voter.objects.filter(is_verified=True).count()
+        total_verified_voters = VoterProfile.objects.filter(verification_status='VERIFIED').count()
         
         turnout_percentage = 0.0
         if total_verified_voters > 0:
             turnout_percentage = round((total_votes_cast / total_verified_voters) * 100, 2)
             
         # Candidates standing
-        candidates = Candidate.objects.filter(election=election)
+        elec_candidates = ElectionCandidate.objects.filter(election=election, is_approved=True)
         candidates_data = []
-        for candidate in candidates:
-            votes = Vote.objects.filter(candidate=candidate).count()
+        for ec in elec_candidates:
+            votes = Vote.objects.filter(election=election, candidate=ec.candidate).count()
             candidates_data.append({
-                "id": str(candidate.id),
-                "name": candidate.name,
-                "party_name": candidate.party_name,
-                "constituency_name": candidate.constituency.name,
+                "id": str(ec.candidate.id),
+                "name": ec.candidate.name,
+                "party_name": ec.candidate.party.name,
+                "constituency_name": ec.constituency.name,
                 "votes": votes
             })
             
@@ -316,7 +347,7 @@ class ElectionResultsView(APIView):
         # Constituency-wise breakdown
         constituency_data = []
         for constituency in Constituency.objects.all():
-            registered = Voter.objects.filter(constituency=constituency, is_verified=True).count()
+            registered = VoterProfile.objects.filter(constituency=constituency, verification_status='VERIFIED').count()
             votes_cast = Vote.objects.filter(election=election, constituency=constituency).count()
             
             c_turnout = 0.0
@@ -332,7 +363,7 @@ class ElectionResultsView(APIView):
             
         return Response({
             "election_id": str(election.id),
-            "election_title": election.title,
+            "election_name": election.name,
             "status": election.status,
             "total_votes": total_votes_cast,
             "total_voters": total_verified_voters,
@@ -346,10 +377,10 @@ class AdminSummaryView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
-        total_voters = Voter.objects.count()
-        pending_voters = Voter.objects.filter(is_verified=False).count()
-        active_elections = Election.objects.filter(status=Election.ACTIVE).count()
-        pending_candidates = Candidate.objects.filter(is_approved=False).count()
+        total_voters = VoterProfile.objects.count()
+        pending_voters = VoterProfile.objects.filter(verification_status='PENDING').count()
+        active_elections = Election.objects.filter(status='ACTIVE').count()
+        pending_candidates = ElectionCandidate.objects.filter(is_approved=False).count()
         
         # Recent audit logs
         recent_logs = AuditLog.objects.all().order_by('-created_at')[:15]
@@ -357,11 +388,11 @@ class AdminSummaryView(APIView):
         for log in recent_logs:
             logs_data.append({
                 "id": str(log.id),
-                "username": log.user.username if log.user else "Anonymous",
-                "action": log.action,
+                "email": log.user.email if log.user else "Anonymous",
+                "event_type": log.event_type,
                 "ip_address": log.ip_address,
                 "timestamp": log.created_at,
-                "details": log.details
+                "metadata": log.metadata
             })
             
         return Response({
@@ -397,13 +428,13 @@ class ExportElectionResultsExcelView(APIView):
         ws_summary.append(["DigiVoting - Election Results Report"])
         ws_summary.append([])
         ws_summary.append(["Election ID", str(election.id)])
-        ws_summary.append(["Election Title", election.title])
+        ws_summary.append(["Election Name", election.name])
         ws_summary.append(["Current Status", election.status])
-        ws_summary.append(["Start Date", election.start_date.strftime("%Y-%m-%d %H:%M:%S") if election.start_date else "N/A"])
-        ws_summary.append(["End Date", election.end_date.strftime("%Y-%m-%d %H:%M:%S") if election.end_date else "N/A"])
+        ws_summary.append(["Start Date", election.start_datetime.strftime("%Y-%m-%d %H:%M:%S") if election.start_datetime else "N/A"])
+        ws_summary.append(["End Date", election.end_datetime.strftime("%Y-%m-%d %H:%M:%S") if election.end_datetime else "N/A"])
         
         total_votes = Vote.objects.filter(election=election).count()
-        total_voters = Voter.objects.filter(is_verified=True).count()
+        total_voters = VoterProfile.objects.filter(verification_status='VERIFIED').count()
         turnout = (total_votes / total_voters * 100) if total_voters > 0 else 0.0
         
         ws_summary.append(["Total Verified Voters", total_voters])
@@ -413,16 +444,16 @@ class ExportElectionResultsExcelView(APIView):
         # Sheet 2: Candidate Standings
         ws_candidates = wb.create_sheet(title="Candidate Standings")
         ws_candidates.append(["Candidate ID", "Candidate Name", "Political Party", "Constituency", "Votes Received"])
-        candidates = Candidate.objects.filter(election=election)
-        for c in candidates:
-            votes = Vote.objects.filter(candidate=c).count()
-            ws_candidates.append([str(c.id), c.name, c.party_name, c.constituency.name, votes])
+        elec_candidates = ElectionCandidate.objects.filter(election=election, is_approved=True)
+        for ec in elec_candidates:
+            votes = Vote.objects.filter(election=election, candidate=ec.candidate).count()
+            ws_candidates.append([str(ec.candidate.id), ec.candidate.name, ec.candidate.party.name, ec.constituency.name, votes])
             
         # Sheet 3: Constituency Turnout
         ws_constituencies = wb.create_sheet(title="Constituency Turnout")
         ws_constituencies.append(["Constituency Name", "Registered Voters", "Votes Cast", "Turnout Percentage"])
         for con in Constituency.objects.all():
-            reg = Voter.objects.filter(constituency=con, is_verified=True).count()
+            reg = VoterProfile.objects.filter(constituency=con, verification_status='VERIFIED').count()
             cast = Vote.objects.filter(election=election, constituency=con).count()
             c_pct = (cast / reg * 100) if reg > 0 else 0.0
             ws_constituencies.append([con.name, reg, cast, f"{c_pct:.2f}%"])
@@ -435,7 +466,6 @@ class ExportElectionResultsExcelView(APIView):
                 ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
                 
         response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        response["Content-Disposition"] = f'attachment; filename="election_report_{election.title.replace(" ", "_")}.xlsx"'
+        response["Content-Disposition"] = f'attachment; filename="election_report_{election.name.replace(" ", "_")}.xlsx"'
         wb.save(response)
         return response
-

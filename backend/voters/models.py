@@ -1,39 +1,46 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from locations.models import Constituency
 
-class Constituency(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+class VoterProfile(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('UNDER_REVIEW', 'Under Review'),
+        ('VERIFIED', 'Verified'),
+        ('REJECTED', 'Rejected'),
+        ('SUSPENDED', 'Suspended'),
+    ]
+    METHOD_CHOICES = [
+        ('VOTER_ID', 'Voter ID Verification'),
+        ('AADHAAR', 'Aadhaar Verification'),
+        ('DIGILOCKER', 'DigiLocker Verification'),
+        ('MANUAL', 'Manual Admin Verification'),
+    ]
 
-    def __str__(self):
-        return self.name
-
-class Voter(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='voter_profile')
-    voter_id_number = models.CharField(max_length=50, unique=True)
-    constituency = models.ForeignKey(Constituency, on_delete=models.PROTECT, related_name='voters')
-    is_verified = models.BooleanField(default=False)
-    verification_date = models.DateTimeField(blank=True, null=True)
+    verification_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    voter_reference = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    verification_method = models.CharField(max_length=20, choices=METHOD_CHOICES, blank=True, null=True)
+    verified_at = models.DateTimeField(blank=True, null=True)
     verified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='verified_voters'
     )
-    face_photo_url = models.TextField(blank=True, null=True)  # Stores raw photo URL for demo visual check
+    constituency = models.ForeignKey(Constituency, on_delete=models.PROTECT, related_name='voters', blank=True, null=True)
+    face_photo_url = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=20, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.get_full_name() or self.user.username} ({self.voter_id_number})"
+        full_name = f"{self.user.first_name} {self.user.last_name}".strip()
+        return f"{full_name or self.user.username} ({self.voter_reference or 'Pending EPIC'})"
 
 
 class VoterIDCard(models.Model):
@@ -42,15 +49,15 @@ class VoterIDCard(models.Model):
         ('SUSPENDED', 'Suspended'),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    voter = models.OneToOneField(Voter, on_delete=models.CASCADE, related_name='voter_id_card')
+    voter = models.OneToOneField(VoterProfile, on_delete=models.CASCADE, related_name='voter_id_card')
     card_number = models.CharField(max_length=50, unique=True)
     full_name = models.CharField(max_length=255)
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=50, blank=True, null=True)
     constituency = models.ForeignKey(Constituency, on_delete=models.PROTECT, related_name='voter_id_cards')
-    photo_url = models.TextField(blank=True, null=True)  # Supabase Storage URL or base64 photo
+    photo_url = models.TextField(blank=True, null=True)
     issued_date = models.DateTimeField(auto_now_add=True)
-    qr_code_data = models.TextField(blank=True, null=True)  # Simple encoded string for demo
+    qr_code_data = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
 
     def __str__(self):

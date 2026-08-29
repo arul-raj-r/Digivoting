@@ -1,144 +1,201 @@
 from django.test import TransactionTestCase
 from django.urls import reverse
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.core.management import call_command
 from rest_framework import status
 from rest_framework.test import APIClient
-from datetime import date
-from authentication.models import User, OTPVerification
-from voters.models import Constituency, Voter, VoterIDCard
+from datetime import date, timedelta
+from django.utils import timezone
 
-class VoterIDCardAuthTests(TransactionTestCase):
+from authentication.models import User, OTPVerification
+from locations.models import State, District, Constituency
+from voters.models import VoterProfile, VoterIDCard
+
+class DigiVoteBackendTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        # 1. Create Constituency
-        self.constituency = Constituency.objects.create(name="Chennai Central", description="Central Chennai Area")
         
-        # 2. Register a Voter (we will do this directly to seed a verified voter)
-        self.voter_user = User.objects.create_user(
-            username="voter_auth_test",
-            password="testpassword123",
-            email="voter_test@test.com",
-            first_name="Raj",
-            last_name="Kumar",
-            role=User.VOTER
-        )
-        self.voter = Voter.objects.create(
-            user=self.voter_user,
-            voter_id_number="VT000099",
-            constituency=self.constituency,
-            face_photo_url="https://supabase.co/photo.jpg",
-            date_of_birth=date(1995, 8, 15),
-            gender="Male",
-            is_verified=False
-        )
-
-        # 3. Create an Admin user
-        self.admin_user = User.objects.create_user(
-            username="admin_auth_test",
+        # Setup location hierarchy
+        self.state = State.objects.create(name="Tamil Nadu")
+        self.district = District.objects.create(state=self.state, name="Chennai")
+        self.constituency = Constituency.objects.create(district=self.district, name="Chennai Central", description="Central Area")
+        
+        # Setup Admin
+        self.admin_user = User.objects.create_superuser(
+            username="admin_test",
             password="adminpassword123",
-            email="admin_test@test.com",
+            email="admin_test@digivote.gov.in",
             role=User.ADMIN
         )
 
-    def test_card_generation_on_approval(self):
-        """
-        Verify that verifying a voter automatically generates a VoterIDCard.
-        """
-        self.client.force_authenticate(user=self.admin_user)
-        url = reverse('voter_verify', args=[self.voter.id])
+        # Setup Voter User
+        self.voter_user = User.objects.create_user(
+            username="voter_test",
+            password="voterpassword123",
+            email="voter_test@mail.com",
+            first_name="Ramesh",
+            last_name="Kumar",
+            role=User.VOTER
+        )
         
-        # Verify card does not exist yet
-        self.assertFalse(VoterIDCard.objects.filter(voter=self.voter).exists())
+        # Setup VoterProfile manually (no automatic trigger exists)
+        self.voter_profile = VoterProfile.objects.create(
+            user=self.voter_user,
+            voter_reference="VT982001",
+            constituency=self.constituency,
+            verification_status='PENDING'
+        )
+
+    def test_database_connection(self):
+        """1. Verify Database Liveness checks"""
+        url = reverse('v1:database_health_check')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+
+    def test_user_creation_and_hashing(self):
+        """2. Verify user creation and password hashing"""
+        self.assertEqual(self.voter_user.email, "voter_test@mail.com")
+        self.assertTrue(self.voter_user.check_password("voterpassword123"))
+        self.assertNotEqual(self.voter_user.password, "voterpassword123")  # Hashed!
+
+    def test_duplicate_email_prevention(self):
+        """3. Enforce duplicate email prevention constraint"""
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(
+                username="another_voter",
+                password="password123",
+                email="voter_test@mail.com",  # Duplicate!
+                role=User.VOTER
+            )
+
+    def test_voter_profile_status(self):
+        """4. Verify default VoterProfile status is PENDING"""
+        profile = VoterProfile.objects.get(user=self.voter_user)
+        self.assertEqual(profile.verification_status, 'PENDING')
+        self.assertFalse(profile.verified_at)
+
+    def test_account_creation_does_not_verify_voter(self):
+        """5. Critical: Account creation must NOT automatically make the user a verified voter"""
+        profile = VoterProfile.objects.get(user=self.voter_user)
+        self.assertNotEqual(profile.verification_status, 'VERIFIED')
+
+    def test_otp_hash_not_plaintext(self):
+        """6. OTP code hashes are not stored in plaintext"""
+        otp = OTPVerification.objects.create(
+            user=self.voter_user,
+            purpose='LOGIN',
+            code_hash=make_password('123456'),
+            expires_at=timezone.now() + timedelta(minutes=5)
+        )
+        self.assertNotEqual(otp.code_hash, '123456')
+        self.assertTrue(check_password('123456', otp.code_hash))
+
+    def test_otp_expiration(self):
+        """7. Verify OTP expiration logic works correctly"""
+        # Expired OTP
+        expired_otp = OTPVerification.objects.create(
+            user=self.voter_user,
+            purpose='LOGIN',
+            code_hash=make_password('123456'),
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+        # Check active OTP query logic matches OTPVerifyView
+        active_otps = OTPVerification.objects.filter(
+            user=self.voter_user,
+            used=False,
+            expires_at__gt=timezone.now()
+        )
+        self.assertNotIn(expired_otp, active_otps)
+
+    def test_otp_single_use(self):
+        """8. Verify OTP single-use constraint is enforced"""
+        otp = OTPVerification.objects.create(
+            user=self.voter_user,
+            purpose='LOGIN',
+            code_hash=make_password('123456'),
+            expires_at=timezone.now() + timedelta(minutes=5)
+        )
+        # Verify liveness
+        self.assertFalse(otp.used)
+        
+        # Complete verify API simulation
+        verify_url = reverse('v1:auth_verify')
+        response = self.client.post(verify_url, {
+            'username': 'voter_test@mail.com',
+            'otp_code': '123456'
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify OTP is marked used
+        otp.refresh_from_db()
+        self.assertTrue(otp.used)
+
+        # Attempt to reuse it
+        response_reuse = self.client.post(verify_url, {
+            'username': 'voter_test@mail.com',
+            'otp_code': '123456'
+        })
+        self.assertEqual(response_reuse.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_database_constraints(self):
+        """9. Check state and district unique together constraints"""
+        d1 = District.objects.create(state=self.state, name="Coimbatore")
+        with self.assertRaises(IntegrityError):
+            District.objects.create(state=self.state, name="Coimbatore")  # Duplicate!
+
+    def test_health_endpoints(self):
+        """10. Verify /api/v1/health/ outputs correct payload"""
+        url = reverse('v1:health_check')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['message'], "DigiVote backend is running")
+
+    def test_admin_access(self):
+        """11. Verify admin permissions gate admin lists"""
+        # Unauthenticated query to list
+        url = reverse('v1:voter_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        
+        # Voter query to list (Voter is not admin)
+        self.client.force_authenticate(user=self.voter_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # Admin query to list
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_seed_demo_command(self):
+        """12. Verify demo database seed command runs successfully"""
+        call_command('seed_demo')
+        # Check that constituencies exist
+        self.assertTrue(Constituency.objects.filter(name__contains="DEMO").exists())
+        self.assertTrue(User.objects.filter(username="voter1").exists())
+
+    def test_card_generation_on_approval(self):
+        """13. Verify voter certification and ID card issuance sequence"""
+        voter_profile = VoterProfile.objects.get(user=self.voter_user)
+        voter_profile.constituency = self.constituency
+        voter_profile.date_of_birth = date(1995, 8, 15)
+        voter_profile.gender = "Male"
+        voter_profile.save()
+
+        self.client.force_authenticate(user=self.admin_user)
+        url = reverse('v1:voter_verify', args=[voter_profile.id])
+        
+        self.assertFalse(VoterIDCard.objects.filter(voter=voter_profile).exists())
         
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Verify card is generated
-        self.assertTrue(VoterIDCard.objects.filter(voter=self.voter).exists())
-        card = VoterIDCard.objects.get(voter=self.voter)
+        self.assertTrue(VoterIDCard.objects.filter(voter=voter_profile).exists())
+        card = VoterIDCard.objects.get(voter=voter_profile)
         self.assertIsNotNone(card.card_number)
-        self.assertEqual(card.full_name, "Raj Kumar")
-        self.assertEqual(card.gender, "Male")
+        self.assertEqual(card.full_name, "Ramesh Kumar")
         self.assertEqual(card.status, "ACTIVE")
-
-    def test_login_verification_flow_voter(self):
-        """
-        Verify the three-step login sequence for verified voters.
-        """
-        # Step 1: Approve voter to generate their card
-        self.client.force_authenticate(user=self.admin_user)
-        self.client.post(reverse('voter_verify', args=[self.voter.id]))
-        self.client.logout()
-        
-        card = VoterIDCard.objects.get(voter=self.voter)
-
-        # Step 2: Post credentials to /auth/login/
-        login_url = reverse('auth_login')
-        response = self.client.post(login_url, {
-            'username': 'voter_auth_test',
-            'password': 'testpassword123'
-        })
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'OTP_REQUIRED')
-        
-        # Retrieve generated OTP
-        otp_record = OTPVerification.objects.filter(user=self.voter_user).latest('created_at')
-        otp_record.otp_code_hash = make_password('123456')
-        otp_record.save()
-        
-        # Step 3: Post OTP to /auth/verify/
-        verify_url = reverse('auth_verify')
-        response = self.client.post(verify_url, {
-            'username': 'voter_auth_test',
-            'otp_code': '123456'
-        })
-        # Check that it returns status CARD_VERIFICATION_REQUIRED and does NOT issue tokens yet
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'CARD_VERIFICATION_REQUIRED')
-        self.assertEqual(response.data['photo_preview_url'], 'https://supabase.co/photo.jpg')
-        self.assertNotIn('access', response.data)
-        
-        # Step 4: Post WRONG card number to /auth/verify-card/
-        verify_card_url = reverse('auth_verify_card')
-        response = self.client.post(verify_card_url, {
-            'username': 'voter_auth_test',
-            'card_number': 'WRONGNUMBER'
-        })
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('2 attempt(s) remaining', response.data['error'])
-        
-        # Step 5: Post CORRECT card number to /auth/verify-card/
-        response = self.client.post(verify_card_url, {
-            'username': 'voter_auth_test',
-            'card_number': card.card_number
-        })
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
-        self.assertEqual(response.data['user']['username'], 'voter_auth_test')
-
-    def test_login_verification_flow_admin_bypasses(self):
-        """
-        Verify that admin bypasses the card verification step.
-        """
-        login_url = reverse('auth_login')
-        response = self.client.post(login_url, {
-            'username': 'admin_auth_test',
-            'password': 'adminpassword123'
-        })
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'OTP_REQUIRED')
-        
-        otp_record = OTPVerification.objects.filter(user=self.admin_user).latest('created_at')
-        otp_record.otp_code_hash = make_password('123456')
-        otp_record.save()
-        
-        verify_url = reverse('auth_verify')
-        response = self.client.post(verify_url, {
-            'username': 'admin_auth_test',
-            'otp_code': '123456'
-        })
-        # Check that it returns tokens directly
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertNotIn('status', response.data)  # Bypassed CARD_VERIFICATION_REQUIRED

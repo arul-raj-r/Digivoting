@@ -1,33 +1,39 @@
 @import "tailwindcss";
 
 @theme {
-  --color-gov-blue: #0b3152; /* ECI Deep Navy Blue */
-  --color-gov-darkblue: #072036;
-  --color-gov-saffron: #f37021; /* ECI Saffron */
-  --color-gov-green: #0b7538; /* ECI Green */
-  --color-gov-gold: #f37021; /* Fallback mapping for gold to saffron */
-  --color-gov-slate: #328CC1;
-  --color-gov-light: #F8FAFC;
-  --color-gov-dark: #0F172A;
-  --color-gov-cardLight: #FFFFFF;
-  --color-gov-cardDark: #1E293B;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Merriweather', Georgia, serif;
+
+  /* Official Election Commission of India (ECI) Palette */
+  --color-eci-navy: #0d2847;
+  --color-eci-darknavy: #07192d;
+  --color-eci-lightnavy: #183e68;
+  --color-eci-saffron: #f47c20;
+  --color-eci-gold: #e59819;
+  --color-eci-green: #11783e;
+  --color-eci-bg: #f3f6fa;
+  --color-eci-border: #d4e0eb;
 }
 
 @layer base {
+  * {
+    box-sizing: border-box;
+  }
+
   body {
-    @apply bg-gov-light text-slate-800 transition-colors duration-200 antialiased font-sans;
-  }
-
-  body.dark {
-    @apply bg-gov-dark text-slate-100;
+    background-color: #f0f4f9;
+    color: #1a202c;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-/* Accessibility high-contrast focus rings */
-input:focus, select:focus, textarea:focus, button:focus-visible {
-  @apply outline-none ring-2 ring-gov-blue ring-offset-2;
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
 }
 
-body.dark input:focus, body.dark select:focus, body.dark textarea:focus, body.dark button:focus-visible {
-  @apply ring-gov-gold ring-offset-slate-900;
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
 }

@@ -4,7 +4,8 @@ from rest_framework import serializers
 
 from authentication.models import User
 from authentication.serializers import UserSerializer
-from voters.models import Constituency, Voter, VoterIDCard
+from locations.models import Constituency
+from voters.models import VoterProfile, VoterIDCard
 
 class ConstituencySerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,7 +17,7 @@ class VoterIDCardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VoterIDCard
-        fields = ('id', 'card_number', 'full_name', 'date_of_birth', 'gender', 'constituency_name', 'photo_url', 'issued_date', 'qr_code_data', 'status')
+        fields = ('id', 'card_number', 'full_name', 'date_of_birth', 'gender', 'constituency_name', 'photo_url', 'issued_date', 'status')
 
 class VoterProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -24,8 +25,8 @@ class VoterProfileSerializer(serializers.ModelSerializer):
     voter_id_card = VoterIDCardSerializer(read_only=True, required=False, allow_null=True)
 
     class Meta:
-        model = Voter
-        fields = ('id', 'user', 'voter_id_number', 'constituency', 'constituency_name', 'is_verified', 'verification_date', 'face_photo_url', 'date_of_birth', 'gender', 'voter_id_card')
+        model = VoterProfile
+        fields = ('id', 'user', 'voter_reference', 'verification_status', 'verification_method', 'verified_at', 'constituency', 'constituency_name', 'face_photo_url', 'date_of_birth', 'gender', 'voter_id_card')
 
 class VoterRegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
@@ -34,35 +35,20 @@ class VoterRegisterSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     phone_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
-    voter_id_number = serializers.CharField(max_length=50)
-    constituency_id = serializers.PrimaryKeyRelatedField(
-        queryset=Constituency.objects.all(), source='constituency'
-    )
-    face_photo_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    date_of_birth = serializers.DateField(required=True)
-    gender = serializers.CharField(max_length=20, required=True)
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username is already taken.")
         return value
 
-    def validate_voter_id_number(self, value):
-        if Voter.objects.filter(voter_id_number=value).exists():
-            raise serializers.ValidationError("Voter ID number is already registered.")
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email is already registered.")
         return value
 
     def create(self, validated_data):
-        constituency = validated_data.pop('constituency')
-        voter_id_number = validated_data.pop('voter_id_number')
-        face_photo_url = validated_data.get('face_photo_url', '')
         password = validated_data.pop('password')
         phone_number = validated_data.get('phone_number', '')
-        date_of_birth = validated_data.pop('date_of_birth')
-        gender = validated_data.pop('gender')
-
-        from django.utils import timezone
-        from voters.views import generate_card_number
 
         with transaction.atomic():
             user = User.objects.create(
@@ -74,30 +60,6 @@ class VoterRegisterSerializer(serializers.Serializer):
                 password=make_password(password),
                 role=User.VOTER
             )
-            voter = Voter.objects.create(
-                user=user,
-                voter_id_number=voter_id_number,
-                constituency=constituency,
-                face_photo_url=face_photo_url,
-                date_of_birth=date_of_birth,
-                gender=gender,
-                is_verified=True,
-                verification_date=timezone.now()
-            )
-            
-            # Auto-generate Voter ID Card
-            card_number = generate_card_number()
-            qr_code_data = f"{card_number}:{voter.id}"
-            
-            VoterIDCard.objects.create(
-                voter=voter,
-                card_number=card_number,
-                full_name=f"{user.first_name} {user.last_name}".strip() or user.username,
-                date_of_birth=voter.date_of_birth,
-                gender=voter.gender,
-                constituency=voter.constituency,
-                photo_url=voter.face_photo_url,
-                qr_code_data=qr_code_data,
-                status='ACTIVE'
-            )
-        return voter
+            # VoterProfile is auto-created or manually setup:
+            VoterProfile.objects.get_or_create(user=user)
+        return user

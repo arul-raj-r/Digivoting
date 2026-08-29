@@ -1,115 +1,146 @@
-# Vote Privacy & Double-Voting Architecture
+# DigiVote System Architecture Specification
 
-This document explains the security architecture designed to enforce the "one-person-one-vote" constraint while mathematically preserving vote secrecy (secrecy of the ballot).
-
----
-
-## 1. Decoupled Voting Design
-
-In traditional database systems, storing votes with a foreign key pointing to the voter table destroys secrecy. To solve this, this platform implements a completely **decoupled schema**:
-
-```
-[Voter castings ballot]
-           │
-           ▼
-┌────────────────────────────────────────┐
-│     Django API (transaction.atomic)    │
-│  - Check eligibility criteria         │
-└──────────────────┬─────────────────────┘
-                   │
-         ┌─────────┴─────────┐
-         ▼                   ▼
-┌─────────────────┐ ┌─────────────────┐
-│  VoteReceipt    │ │      Vote       │
-│  (Audit Log)    │ │ (Ballot Box)    │
-├─────────────────┤ ├─────────────────┤
-│ - voter_id      │ │ - election_id   │
-│ - election_id   │ │ - candidate_id  │
-│ - receipt_hash  │ │ - constituency  │
-└─────────────────┘ └─────────────────┘
- (Unique index on    (No link back to 
-  voter + election)   the Voter profile)
-```
-
-### Table 1: `VoteReceipt` (The Audit Log)
-- **Role**: Records **that** a specific voter has cast a ballot in a specific election.
-- **Foreign Keys**: `voter_id`, `election_id`.
-- **Constraint**: Unique index on `(voter_id, election_id)`.
-- **Privacy**: Does not store candidate selection, party, or ballot metadata.
-
-### Table 2: `Vote` (The Digital Ballot Box)
-- **Role**: Records the actual choice.
-- **Foreign Keys**: `election_id`, `candidate_id`, `constituency_id`.
-- **Privacy**: Contains no voter ID, user association, or timestamp/session metadata.
+This document defines the target high-level software architecture, component relationships, module boundaries, backend application directories, frontend layouts, and comprehensive API endpoints for the **DigiVote** platform.
 
 ---
 
-## 2. Double-Voting Prevention & Transaction Safety
+## 1. High-Level Architecture Overview
 
-To prevent double voting (even under highly concurrent requests), the API verification checks and DB writes are executed inside a Django `transaction.atomic()` block:
+DigiVote uses a decoupled modern web application architecture designed for maximum performance, security, and anonymity:
 
-```python
-with transaction.atomic():
-    # 1. Lock the check on VoteReceipt existence
-    if VoteReceipt.objects.filter(voter=voter, election=election).exists():
-        raise ValidationError("Double voting detected.")
-        
-    # 2. Insert Voter Audit Receipt
-    VoteReceipt.objects.create(
-        election=election,
-        voter=voter,
-        receipt_number=receipt_hash
-    )
-    
-    # 3. Insert Independent Ballot Choice
-    Vote.objects.create(
-        election=election,
-        constituency=voter.constituency,
-        candidate=candidate
-    )
 ```
-
-### Concurrency Handling
-- Under concurrent conditions (e.g. if the same voter submits two parallel voting requests at the exact same millisecond), both threads will read that no receipt exists.
-- However, when the database attempts to write, the PostgreSQL database unique constraint on `VoteReceipt (voter_id, election_id)` forces a collision.
-- The database raises an `IntegrityError` on the second insert, which triggers an immediate roll-back of the second transaction. No duplicate ballot is cast, and the system integrity is preserved.
+                  ┌────────────────────────────────────────┐
+                  │          React Frontend Client         │
+                  │  (React Router, Axios, Context API,   │
+                  │   Tailwind CSS - JavaScript ONLY)      │
+                  └───────────────────┬────────────────────┘
+                                      │
+                                      ▼ HTTPS Requests
+                  ┌────────────────────────────────────────┐
+                  │         Django REST Framework          │
+                  │        (Authentication, Auditing,      │
+                  │         Verification, Elections)       │
+                  └───────┬────────────────────────┬───────┘
+                          │                        │
+                          ▼ SQL Queries            ▼ API Requests
+┌───────────────────────────────────┐    ┌───────────────────────────────────┐
+│        Supabase PostgreSQL        │    │    External Identity Providers    │
+│  (PgBouncer Connection Pooler,   │    │  (DigiLocker OAuth 2.0 gateway,   │
+│   UUIDs, pgvector Embeddings)     │    │   UIDAI Aadhaar Verification)     │
+└───────────────────────────────────┘    └───────────────────────────────────┘
+```
 
 ---
 
-## 3. Voter Eligibility Gates
+## 2. Component Responsibility Segmentation
 
-Prior to casting a ballot, the backend API enforces five eligibility gates:
-1. **Verified Account Check**: `voter.is_verified == True`. Pending applications cannot vote.
-2. **Election Status Check**: `election.status == Election.ACTIVE`.
-3. **Timeline Bounds Check**: `start_date <= current_time <= end_date`.
-4. **Candidate Approval Check**: `candidate.is_approved == True`.
-5. **Constituency Scope Gate**: `voter.constituency == candidate.constituency`. A voter registered in Chennai Central cannot cast a vote for a candidate running in Coimbatore South.
+The application strictly separates user registrations from official voter parameters to prevent automatic verification on signup.
+
+```mermaid
+graph TD
+    UserReg[User Registrations / Sign up] --> WebAccount[1. Website Account created]
+    WebAccount --> IdentityCheck{2. Identity Verification?}
+    IdentityCheck -->|Fails / Pending| Unverified[Access Blocked to Voting Terminal]
+    IdentityCheck -->|Succeeds| VerifiedID[3. Verified Identity Linked]
+    VerifiedID --> VoterProfile[4. Voter Profile Created]
+    VoterProfile --> EligibilityCheck{5. Election Eligibility Check}
+    EligibilityCheck -->|Eligible| VoteTerminal[6. Access Terminal & Cast Vote]
+```
+
+1. **Website Account (`users` app)**: Governs portal credentials (username, email, password, Google OAuth claims). Account registration does NOT grant voter status.
+2. **Verified Identity (`identity` app)**: Manages third-party validation statuses (DigiLocker credential payloads, verified Aadhaar matches).
+3. **Voter Profile (`voters` app)**: Stores demographics, polling stations, and constituency data.
+4. **Election Eligibility (`elections` app)**: Evaluates if a profile has permissions to access an active election ballot based on their constituency.
+5. **Vote (`voting` app)**: The independent digital ballot box. Completely detached from voter profiles to ensure secrecy.
 
 ---
 
-## 4. Voter ID Card Auto-Generation & Verification Login Flow
+## 3. Backend Django App Structure
 
-### 4.1 Auto-Generation Workflow
+The Django project is refactored into 17 modular, decoupled applications under the backend project root, ensuring separation of duties:
+
+1. **`authentication`**: Core user signup, credential logins, token issuance, and OTP verifications.
+2. **`identity`**: Manages verification configurations and maps user profiles to third-party ID providers.
+3. **`voters`**: Handles voter registration profiles and Voter ID Card issuance.
+4. **`constituencies`**: Administrative mapping of states, districts, and assembly boundaries.
+5. **`elections`**: Election setup, status progression, and metadata schedules.
+6. **`candidates`**: Candidate registration, biographies, party associations, and approval workflows.
+7. **`voting`**: The anonymous ballot box system, transaction concurrency guards, and random delay queues.
+8. **`verification`**: Centralized verification dashboard middleware.
+9. **`face_auth`**: Integrates webcam frames audit checkpoints and generates/compares ArcFace vector embeddings.
+10. **`webauthn_auth`**: Handles WebAuthn key registrations, challenge generation, and cryptographical sign validation.
+11. **`digilocker`**: DigiLocker OAuth 2.0 handshake endpoints and document fetch clients.
+12. **`aadhaar`**: Aadhaar provider abstractions and mock interface classes.
+13. **`notifications`**: Dispatches alerts, emails, and SMS codes.
+14. **`security`**: Handles rate limit logging, session timeouts, and malicious injection filters.
+15. **`audit`**: Houses the immutable, append-only `AuditLog` ledger.
+16. **`reports`**: Compilation of election analytics and Excel file export utilities.
+17. **`support`**: Ticket filing system for citizens experiencing identity lockouts or biometric failures.
+
+---
+
+## 4. Frontend Folder Architecture
+
+The frontend is written strictly in **JavaScript (no TypeScript)**, styled using **Vanilla CSS and Tailwind CSS**, and structured as follows:
+
 ```
-[Admin Verifies Voter] 
-       │
-       ▼ (transaction.atomic)
-[Generate Unique 10-char Card Number (e.g. ABC1234567)]
-       │
-       ▼
-[Create VoterIDCard record linked to Voter Profile]
-       │
-       ▼
-[Populate QR Code details (card_number + voter_id) & Demographics]
+frontend/src/
+├── assets/          # Static assets: images, local icons
+├── components/      # Reusable UI controls (Buttons, Cards, Modals, Camera)
+├── context/         # React Context stores for authentication, themes
+├── hooks/           # Custom React hooks (useAuth, useLocalStorage, useCamera)
+├── layouts/         # Page structures: Header, Footer, AdminLayout, PortalLayout
+├── pages/           # Route targets (Landing, Login, Terminal, Results)
+├── services/        # Axios API fetch modules (authService, electionService)
+├── utils/           # Helper scripts (validators, date formatters, crypto hashing)
+├── index.css        # Main stylesheet importing Tailwind
+└── main.jsx         # App entry point
 ```
 
-### 4.2 Multi-Factor Login Verification Pipeline
-The verification process occurs sequentially, requiring both knowledge (password, card number) and possession (OTP):
-1. **Factor 1 (Credentials)**: Voter submits username/email and password.
-2. **Factor 2 (OTP)**: Voter enters the 6-digit OTP code printed/sent.
-3. **Factor 3 (Card Possession Check)**:
-   - System presents a blurred thumbnail preview of the registered face photo to provide visual feedback.
-   - Voter must enter their unique **Voter ID Card Number**.
-   - Backend compares inputs case-insensitively with `VoterIDCard.card_number`.
-   - On success, final simple JWT session tokens are generated.
-   - On mismatch, failed-attempt count increments. The session invalidates after 3 failures. Throttling limits prevent brute-force attacks.
+---
+
+## 5. API Endpoints Map
+
+All requests route through `/api/v1/` and return clean JSON payloads:
+
+### 5.1. Authentication & Google OAuth
+* `POST /api/v1/auth/register/` - Direct portal account registration.
+* `POST /api/v1/auth/login/` - Portal login credentials submission.
+* `POST /api/v1/auth/logout/` - Token revocation and session termination.
+* `POST /api/v1/auth/otp/` - Triggers a new 2FA verification OTP dispatch.
+* `POST /api/v1/auth/otp/verify/` - Validates the submitted OTP.
+* `POST /api/v1/google/login/` - Forward Google's Identity Token (`id_token`) for backend validation.
+
+### 5.2. Verification & Integrations
+* `POST /api/v1/identity/verify/` - Initializes identity verification flow.
+* `GET /api/v1/digilocker/connect/` - Returns the authorize URL redirecting to DigiLocker.
+* `GET /api/v1/digilocker/callback/` - Handles code exchanges and reads verifiable claims.
+* `POST /api/v1/aadhaar/request-otp/` - Requests an OTP dispatch viaUIDAI abstraction.
+* `POST /api/v1/aadhaar/verify-otp/` - Submits the UIDAI e-KYC code for registration verification.
+
+### 5.3. Biometrics Subsystem
+* `POST /api/v1/face/verify/` - Uploads captured webcam frames for liveness and ArcFace matching.
+* `GET /api/v1/webauthn/register/` - Generates passkey challenge parameters for the browser.
+* `POST /api/v1/webauthn/register/verify/` - Cryptographically registers the public key assertion.
+* `GET /api/v1/webauthn/login/` - Fetches login challenge parameters.
+* `POST /api/v1/webauthn/login/verify/` - Validates passkey signature assertion.
+
+### 5.4. Voter Registry & Boundaries
+* `GET /api/v1/voters/me/` - Retrieves active voter profile.
+* `POST /api/v1/voters/me/card/` - Requests Voter ID Card generation.
+* `GET /api/v1/constituencies/` - Lists constituencies.
+
+### 5.5. Elections & Voting Terminal
+* `GET /api/v1/elections/` - Lists active, scheduled, and completed elections.
+* `GET /api/v1/elections/<id>/candidates/` - Lists candidates filter-scoped to the voter's constituency.
+* `POST /api/v1/voting/cast/` - Submits biometric signature and ballot choice (enclosed in atomic block).
+* `GET /api/v1/receipts/<receipt_number>/` - Public check verification verifying ballot inclusion.
+* `GET /api/v1/results/<election_id>/` - Standings and constituency-wise turnouts.
+
+### 5.6. Administration, Security & Auditing
+* `GET /api/v1/admin/summary/` - Aggregated metrics dashboard.
+* `GET /api/v1/admin/voters/pending/` - Queue of voter verification requests.
+* `POST /api/v1/admin/voters/<id>/approve/` - Administrator sign-off on a voter's profile.
+* `POST /api/v1/admin/candidates/approve/` - Administrative candidate validation.
+* `GET /api/v1/security/events/` - Logs brute force and session hijacking incidents.
+* `GET /api/v1/audit/logs/` - Immutable audit ledger feed.

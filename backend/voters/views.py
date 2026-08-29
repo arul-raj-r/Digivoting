@@ -9,7 +9,9 @@ from rest_framework.generics import ListAPIView
 
 from authentication.permissions import IsAdmin
 from authentication.utils import log_event
-from voters.models import Constituency, Voter, VoterIDCard
+from locations.models import Constituency
+from voters.models import VoterProfile, VoterIDCard
+from authentication.serializers import UserSerializer
 from voters.serializers import ConstituencySerializer, VoterProfileSerializer, VoterRegisterSerializer
 
 def generate_card_number():
@@ -32,34 +34,33 @@ class VoterRegisterView(APIView):
     def post(self, request):
         serializer = VoterRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        voter = serializer.save()
+        user = serializer.save()
         
         # Log registration event
         log_event(
-            voter.user, 
-            'VOTER_REGISTRATION', 
+            user, 
+            'USER_REGISTRATION', 
             request, 
             {
-                'voter_id': str(voter.id),
-                'constituency_name': voter.constituency.name
+                'user_id': str(user.id)
             }
         )
         
         return Response(
-            VoterProfileSerializer(voter).data, 
+            UserSerializer(user).data, 
             status=status.HTTP_201_CREATED
         )
 
 
 class VoterListView(ListAPIView):
     permission_classes = [IsAdmin]
-    queryset = Voter.objects.all().order_by('-created_at')
+    queryset = VoterProfile.objects.all().order_by('-created_at')
     serializer_class = VoterProfileSerializer
 
 
 class PendingVotersView(ListAPIView):
     permission_classes = [IsAdmin]
-    queryset = Voter.objects.filter(is_verified=False).order_by('-created_at')
+    queryset = VoterProfile.objects.filter(verification_status='PENDING').order_by('-created_at')
     serializer_class = VoterProfileSerializer
 
 
@@ -68,23 +69,24 @@ class VerifyVoterView(APIView):
 
     def post(self, request, pk):
         try:
-            voter = Voter.objects.get(pk=pk)
-        except Voter.DoesNotExist:
+            voter = VoterProfile.objects.get(pk=pk)
+        except VoterProfile.DoesNotExist:
             return Response(
                 {"error": "Voter profile not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
             
-        if voter.is_verified:
+        if voter.verification_status == 'VERIFIED':
             return Response(
                 {"message": "Voter is already verified."},
                 status=status.HTTP_200_OK
             )
             
         with transaction.atomic():
-            voter.is_verified = True
-            voter.verification_date = timezone.now()
+            voter.verification_status = 'VERIFIED'
+            voter.verified_at = timezone.now()
             voter.verified_by = request.user
+            voter.verification_method = 'MANUAL'
             voter.save()
             
             # Auto-generate Voter ID Card
@@ -112,7 +114,7 @@ class VerifyVoterView(APIView):
                 request, 
                 {
                     'voter_id': str(voter.id),
-                    'verified_by': request.user.username,
+                    'verified_by': request.user.email,
                     'card_number': card_number
                 }
             )

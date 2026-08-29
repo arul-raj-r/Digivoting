@@ -1,6 +1,6 @@
-from authentication.models import AuditLog
+from audit.models import AuditLog
 
-def log_event(user, action, request=None, details=None):
+def log_event(user, action, request=None, details=None, severity='INFO', result='SUCCESS'):
     """
     Log an event to the AuditLog database table.
     """
@@ -23,8 +23,10 @@ def log_event(user, action, request=None, details=None):
         
     return AuditLog.objects.create(
         user=user if user and user.is_authenticated else None,
-        action=action,
+        event_type=action,
+        severity=severity,
+        result=result,
         ip_address=ip_address,
         user_agent=user_agent,
-        details=details
+        metadata=details
     )
