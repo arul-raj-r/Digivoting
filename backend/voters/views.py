@@ -1,5 +1,3 @@
-import random
-import string
 from django.utils import timezone
 from django.db import transaction
 from rest_framework.views import APIView
@@ -10,17 +8,9 @@ from rest_framework.generics import ListAPIView
 from authentication.permissions import IsAdmin
 from authentication.utils import log_event
 from locations.models import Constituency
-from voters.models import VoterProfile, VoterIDCard
+from voters.models import VoterProfile
 from authentication.serializers import UserSerializer
 from voters.serializers import ConstituencySerializer, VoterProfileSerializer, VoterRegisterSerializer
-
-def generate_card_number():
-    while True:
-        letters = ''.join(random.choices(string.ascii_uppercase, k=3))
-        digits = ''.join(random.choices(string.digits, k=7))
-        card_num = f"{letters}{digits}"
-        if not VoterIDCard.objects.filter(card_number=card_num).exists():
-            return card_num
 
 class ConstituencyListView(ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -89,33 +79,14 @@ class VerifyVoterView(APIView):
             voter.verification_method = 'MANUAL'
             voter.save()
             
-            # Auto-generate Voter ID Card
-            card_number = generate_card_number()
-            qr_code_data = f"{card_number}:{voter.id}"
-            
-            VoterIDCard.objects.get_or_create(
-                voter=voter,
-                defaults={
-                    'card_number': card_number,
-                    'full_name': f"{voter.user.first_name} {voter.user.last_name}".strip() or voter.user.username,
-                    'date_of_birth': voter.date_of_birth,
-                    'gender': voter.gender,
-                    'constituency': voter.constituency,
-                    'photo_url': voter.face_photo_url,
-                    'qr_code_data': qr_code_data,
-                    'status': 'ACTIVE'
-                }
-            )
-            
             # Log verification event
             log_event(
                 voter.user, 
                 'VOTER_VERIFIED', 
                 request, 
                 {
-                    'voter_id': str(voter.id),
+                    'voter_profile_id': str(voter.id),
                     'verified_by': request.user.email,
-                    'card_number': card_number
                 }
             )
             

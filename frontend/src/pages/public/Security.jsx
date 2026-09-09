@@ -1,38 +1,159 @@
-import { ShieldCheck, EyeOff, ShieldAlert, Key } from 'lucide-react';
-import Card from '../../components/common/Card';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import PublicLayout from '../../layouts/PublicLayout';
+import { 
+  ShieldCheck, 
+  Key, 
+  Mail, 
+  Laptop, 
+  UserCheck, 
+  Camera, 
+  Ticket, 
+  Lock, 
+  Terminal, 
+  ShieldAlert, 
+  CheckCircle2, 
+  ArrowRight
+} from 'lucide-react';
 
 export default function Security() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
-      <div className="max-w-3xl space-y-4">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Security Architecture</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-          The safety and integrity of public votes are maintained through cryptographic protocols, isolated backend systems, and device-level verification.
-        </p>
-      </div>
+  const securityFeatures = [
+    {
+      title: 'Secure Authentication & Password Hashing',
+      icon: Key,
+      badge: 'Module 1 & 2',
+      details: 'Passphrases are salted and hashed using PBKDF2 / Argon2 cryptographic functions. Account lockout mechanisms automatically trigger after consecutive failed attempts to thwart automated credential-stuffing.'
+    },
+    {
+      title: 'Email Domain & Ownership Verification',
+      icon: Mail,
+      badge: 'Module 4',
+      details: 'Tokens generated for email confirmation are single-use, time-bound, and stored as cryptographic hashes. Resend intervals enforce server-side 30-second cooldown windows to eliminate spam and resource exhaustion.'
+    },
+    {
+      title: 'Multi-Factor OTP Authentication',
+      icon: ShieldCheck,
+      badge: 'Module 5',
+      details: '6-digit authentication challenges are generated dynamically, hashed with SHA-256 before storage, and expire in 5 minutes. The backend enforces a maximum attempt limit (default: 3 attempts) before invalidating the challenge.'
+    },
+    {
+      title: 'Session Management & Device Revocation',
+      icon: Laptop,
+      badge: 'Module 6',
+      details: 'Active sessions maintain distinct refresh token identifiers (JTI) tracked in database records. Citizens can audit all currently signed-in devices with IP addresses and user agents, and revoke individual or all sessions remotely.'
+    },
+    {
+      title: 'Role-Based Access Control (RBAC)',
+      icon: UserCheck,
+      badge: 'Platform Security',
+      details: 'Authorization is governed strictly by the Django backend using custom permissions. Frontend views merely reflect granted capabilities; no client-side claims or tokens can override backend role restrictions.'
+    },
+    {
+      title: 'Voter Eligibility Roster Validation',
+      icon: CheckCircle2,
+      badge: 'Election Security',
+      details: 'Voters must be pre-enrolled on the election roster. The system verifies that the authenticated user matches an authorized voter record and strictly checks that no ballot has been cast previously in the target election.'
+    },
+    {
+      title: 'Webcam Face Verification',
+      icon: Camera,
+      badge: 'Biometric Pipeline',
+      details: 'When webcam verification is enabled for an election, real-time client camera captures are compared against authorized photo embeddings using OpenCV and ArcFace models, confirming physical voter presence.'
+    },
+    {
+      title: 'One-Time Single-Use Voting Authorization',
+      icon: Ticket,
+      badge: 'Ballot Gate',
+      details: 'Following successful OTP challenge and facial verification, a short-lived, single-use voting authorization token is minted. It must be consumed at the exact moment the ballot is cast, preventing multi-casting.'
+    },
+    {
+      title: 'Confidential Ballot Handling',
+      icon: Lock,
+      badge: 'Ballot Secrecy',
+      details: 'Ballots are encrypted with symmetric per-election keys and deliberately lack any foreign key association to the voter. Timestamps are truncated to the minute to prevent statistical correlation attacks.'
+    },
+    {
+      title: 'Centralized Audit & Security Event Logging',
+      icon: Terminal,
+      badge: 'Module 7',
+      details: 'All security events (logins, lockouts, verification challenges, election state changes, result calculations) are written to persistent audit logs with severity levels, client IP addresses, and timestamps.'
+    }
+  ];
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card title="Device Biometrics & WebAuthn" icon={<Key className="h-6 w-6" />}>
-          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-            Ensures that the voting device is controlled by the verified owner. WebAuthn handles device-level security without exposing biometric data to the web.
+  return (
+    <PublicLayout>
+      {/* Header Banner */}
+      <section className="py-16 lg:py-24 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#070b14]/50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Verified Architectural Security</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+            Security Architecture
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            DigiVote is built upon verified security mechanisms designed to protect election integrity, voter confidentiality, and system auditability.
           </p>
-        </Card>
-        <Card title="Face Verification" icon={<ShieldCheck className="h-6 w-6" />}>
-          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-            Verifies the user matches the voter profile before a vote can be finalized, preventing duplicate casting or account takeovers.
+        </div>
+      </section>
+
+      {/* Security Architecture Grid */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {securityFeatures.map((feat, idx) => {
+              const Icon = feat.icon;
+              return (
+                <div 
+                  key={idx}
+                  className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 depth-card flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {feat.badge}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {feat.title}
+                    </h3>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {feat.details}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Security Policy Statement */}
+      <section className="py-16 bg-slate-50 dark:bg-[#070b14] border-t border-slate-200/80 dark:border-slate-800/80">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+            Transparency & Verification Policy
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            DigiVote does not make unverified cryptographic claims or advertise artificial certifications. Every security guarantee described on this platform corresponds directly to tested backend code and verified database operations.
           </p>
-        </Card>
-        <Card title="Data Privacy & Anonymity" icon={<EyeOff className="h-6 w-6" />}>
-          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-            Ballot logs do not connect to individual voter names or registration details in the database, preserving absolute confidentiality.
-          </p>
-        </Card>
-        <Card title="Audit Event Trails" icon={<ShieldAlert className="h-6 w-6" />}>
-          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-            Tracks all operations, configuration updates, and device profiles to immediately flag duplicate voting attempts or database mismatches.
-          </p>
-        </Card>
-      </div>
-    </div>
+          <div className="pt-2">
+            <Link
+              to="/contact"
+              className="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              <span>Have security questions? Contact our team</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </section>
+    </PublicLayout>
   );
 }

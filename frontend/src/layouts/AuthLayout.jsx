@@ -49,8 +49,8 @@ export default function AuthLayout({ children, title, subtitle }) {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-sm">Device Biometrics & WebAuthn</h4>
-                  <p className="text-xs text-slate-300">Link your device credentials to protect against unauthorized voter access.</p>
+                  <h4 className="font-semibold text-sm">Active Session Management</h4>
+                  <p className="text-xs text-slate-300">Inspect and terminate active device sessions in real time.</p>
                 </div>
               </div>
             </div>
@@ -60,7 +60,7 @@ export default function AuthLayout({ children, title, subtitle }) {
         <div>
           <div className="text-xs text-slate-400 border-t border-slate-700/50 pt-6">
             <p className="font-semibold text-slate-350 mb-1">Official Security Reminder</p>
-            <p>Always verify the browser address bar is securely connected. DigiVote staff will never request your passwords, OTP keys, or Aadhaar credentials.</p>
+            <p>Always verify the browser address bar is securely connected. DigiVote staff will never request your passwords, OTP keys, or private credentials.</p>
           </div>
         </div>
       </div>

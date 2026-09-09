@@ -8,7 +8,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, models
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -292,7 +292,16 @@ class OTPVerifyView(APIView):
 
     def post(self, request):
         challenge_id = request.data.get('challenge_id', '')
-        otp = request.data.get('otp', '')
+        otp = request.data.get('otp') or request.data.get('otp_code', '')
+        
+        if not challenge_id and request.data.get('username'):
+            user_match = User.objects.filter(
+                models.Q(username=request.data.get('username')) | models.Q(email=request.data.get('username'))
+            ).first()
+            if user_match:
+                latest_otp = OTPVerification.objects.filter(user=user_match).order_by('-created_at').first()
+                if latest_otp:
+                    challenge_id = str(latest_otp.id)
         
         if not challenge_id or not otp:
             return api_error("VALIDATION_ERROR", "Challenge ID and OTP are required.")
@@ -818,7 +827,7 @@ class AIChatView(APIView):
                 "🔒 **Double-Voting Prevention & Secrecy Architecture**:\n\n"
                 "1. **Decoupled Tables**: When you submit a ballot, two distinct entries are written in an atomic database transaction. "
                 "The `VoteReceipt` logs *that* you voted in a specific election (preventing you from voting again). "
-                "The `Vote` table stores *who you voted for*, but it is completely disconnected from your identity (no user ID or voter ID is stored).\n"
+                "The `Vote` table stores *who you voted for*, but it is completely disconnected from your identity (no user ID or citizen identifier is stored).\n"
                 "2. **Cryptographic Receipt**: You receive a SHA-256 cryptographic receipt hash (e.g., `RECEIPT: H4X9...`). This allows you to verify that your ballot was entered in the audit ledger, but contains no details revealing *which* candidate you selected."
             )
         elif any(kw in msg_lower for kw in ['how to vote', 'steps to vote', 'voting terminal', 'process', 'guide']):
@@ -826,8 +835,8 @@ class AIChatView(APIView):
                 "🗳️ **Step-by-Step Voting Guide**:\n\n"
                 "1. **Register**: Go to the 'Register' page, fill in your details, and check your email to activate your account.\n"
                 "2. **Login & OTP**: Log in with your email and password. Retrieve the 6-digit OTP from the backend server console and submit it.\n"
-                "3. **Become Verified Voter**: Link your Identity Profile and await admin approval.\n"
-                "4. **Go to Dashboard**: Access the 'Voting Portal' from the header, find an active election, and click 'Cast Vote'."
+                "3. **Check Eligible Elections**: Access your Dashboard to see active elections you are registered for.\n"
+                "4. **Cast Vote**: Click 'Enter Voting Hub', review candidates, and submit your encrypted ballot."
             )
         elif any(kw in msg_lower for kw in ['otp', 'verification code', 'verify code', 'cooldown', 'login code']):
             reply = (

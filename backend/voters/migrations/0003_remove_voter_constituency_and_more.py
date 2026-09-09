@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('verification_status', models.CharField(choices=[('PENDING', 'Pending'), ('UNDER_REVIEW', 'Under Review'), ('VERIFIED', 'Verified'), ('REJECTED', 'Rejected'), ('SUSPENDED', 'Suspended')], default='PENDING', max_length=20)),
                 ('voter_reference', models.CharField(blank=True, max_length=50, null=True, unique=True)),
-                ('verification_method', models.CharField(blank=True, choices=[('VOTER_ID', 'Voter ID Verification'), ('AADHAAR', 'Aadhaar Verification'), ('DIGILOCKER', 'DigiLocker Verification'), ('MANUAL', 'Manual Admin Verification')], max_length=20, null=True)),
+                ('verification_method', models.CharField(blank=True, choices=[('MANUAL', 'Manual Admin Verification'), ('EMAIL_OTP', 'Email OTP Verification')], max_length=20, null=True)),
                 ('verified_at', models.DateTimeField(blank=True, null=True)),
                 ('face_photo_url', models.TextField(blank=True, null=True)),
                 ('date_of_birth', models.DateField(blank=True, null=True)),

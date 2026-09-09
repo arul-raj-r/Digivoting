@@ -1,230 +1,349 @@
-import { Link } from 'react-router-dom';
-import { Shield, Lock, ShieldCheck, Award, FileText, CheckCircle2, Phone, Mail, HelpCircle } from 'lucide-react';
-import RegisterForm from '../components/auth/RegisterForm';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
+import { 
+  Shield, 
+  Lock, 
+  Mail, 
+  User, 
+  Phone, 
+  Eye, 
+  EyeOff, 
+  ArrowRight, 
+  Sun, 
+  Moon, 
+  Laptop,
+  CheckCircle2, 
+  AlertCircle, 
+  RefreshCw,
+  ShieldCheck,
+  Check
+} from 'lucide-react';
+import { register } from '../api/auth';
 
 export default function Register() {
+  const navigate = useNavigate();
+  const { themeMode, cycleTheme, resolvedTheme } = useTheme();
+
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    mobileNumber: '',
+    password: '',
+    confirmPassword: ''
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Compute password strength
+  const getPasswordStrength = (pass) => {
+    let score = 0;
+    if (pass.length >= 8) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+    return score;
+  };
+
+  const strength = getPasswordStrength(formData.password);
+  const strengthLabels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
+  const strengthColors = ['bg-slate-300 dark:bg-slate-700', 'bg-rose-500', 'bg-amber-500', 'bg-sky-500', 'bg-emerald-500'];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!formData.fullName.trim()) {
+      setError('Please provide your full legal name.');
+      return;
+    }
+    if (!formData.email.trim()) {
+      setError('Please enter your institutional email address.');
+      return;
+    }
+    if (!formData.mobileNumber.trim()) {
+      setError('Please provide a mobile phone number for verification alerts.');
+      return;
+    }
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await register({
+        full_name: formData.fullName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        mobile_number: formData.mobileNumber.trim(),
+        phone_number: formData.mobileNumber.trim(),
+        password: formData.password,
+        confirm_password: formData.confirmPassword,
+        password_confirmation: formData.confirmPassword,
+      });
+
+      // Navigate to email verification with registered email
+      navigate('/verify-email', {
+        state: { email: formData.email.trim() }
+      });
+    } catch (err) {
+      const serverMsg = err.response?.data?.message || err.message || 'Registration failed. Please check details.';
+      setError(serverMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#f0f4f9] text-slate-800 flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col justify-between bg-slate-50 dark:bg-[#070b14] text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
-      {/* 1. TOP NATIONAL STRIP */}
-      <div className="w-full h-1.5 bg-gradient-to-r from-[#f47c20] via-white to-[#11783e]" />
-      
-      {/* 2. ECI OFFICIAL HEADER BAR */}
-      <header className="w-full bg-[#0d2847] text-white shadow-md border-b border-[#183e68]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          
-          {/* Emblem & Title */}
-          <div className="flex items-center gap-3.5">
-            {/* National Emblem Replica Seal */}
-            <div className="w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-amber-300 shadow-inner">
-              <svg className="w-7 h-7 fill-current text-amber-300" viewBox="0 0 24 24">
-                <path d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4zm0 3.18l6 3v4.82c0 4.38-2.92 8.48-6 9.6-3.08-1.12-6-5.22-6-9.6V8.18l6-3zM11 7h2v6h-2zm0 8h2v2h-2z" />
-              </svg>
+      {/* Top Navbar */}
+      <header className="w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-[#070b14]/80 backdrop-blur-md px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3 select-none group">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/25 group-hover:scale-105 transition-transform">
+              <Shield className="h-5 w-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight font-serif text-white">
-                  भारत निर्वाचन आयोग
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
+                  DigiVote
                 </span>
-                <span className="hidden md:inline-block text-[11px] font-bold px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded">
-                  ECI VOTER SERVICES
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-bold">
+                  REGISTRATION
                 </span>
               </div>
-              <p className="text-xs text-slate-200 font-medium tracking-wide">
-                Election Commission of India — DigiVote Sovereign Portal
-              </p>
             </div>
-          </div>
+          </Link>
 
-          {/* Quick links & Helpline */}
-          <div className="flex items-center gap-4 text-xs">
-            <div className="hidden lg:flex items-center gap-2 text-slate-200 border-r border-blue-800 pr-4">
-              <Phone className="w-3.5 h-3.5 text-amber-300" />
-              <span>Toll Free Voter Helpline: <strong>1950</strong></span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-slate-300 hidden sm:inline">Already registered?</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title={`Theme: ${themeMode.toUpperCase()} (Click to toggle)`}
+              aria-label="Toggle theme"
+            >
+              {themeMode === 'system' ? (
+                <Laptop className="h-4 w-4 text-indigo-500" />
+              ) : resolvedTheme === 'dark' ? (
+                <Moon className="h-4 w-4 text-indigo-400" />
+              ) : (
+                <Sun className="h-4 w-4 text-amber-500" />
+              )}
+            </button>
+
+            <div className="text-xs text-slate-500">
+              Already registered?{' '}
               <Link
                 to="/login"
-                className="px-4 py-1.5 rounded bg-[#f47c20] hover:bg-[#e06910] text-white font-bold text-xs uppercase tracking-wide transition-colors shadow-sm"
+                className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
               >
-                Citizen Sign In
+                Sign In
               </Link>
             </div>
           </div>
         </div>
       </header>
 
-      {/* 3. BREADCRUMB / NOTICE BAR */}
-      <div className="w-full bg-[#183e68] text-white text-xs py-1.5 px-4 sm:px-8 border-b border-[#0d2847]">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-amber-300">Portals:</span>
-            <span>National Voter's Service &bull; Online Registration &bull; Form 6 Digital Portal</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-3 text-slate-300">
-            <span>Official Democracy Network (Module 1)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. MAIN CONTENT SECTION */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-        
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {/* Main Registration Container */}
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-12">
+        <div className="max-w-lg w-full space-y-6">
           
-          {/* LEFT COLUMN: ECI Trust & Instructions (5 Cols) */}
-          <div className="lg:col-span-5 space-y-6">
+          {/* Card Box */}
+          <div className="rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6">
             
-            {/* Main Welcome Card */}
-            <div className="bg-white rounded-lg border border-[#d4e0eb] p-6 shadow-sm">
-              <div className="flex items-center gap-2 text-[#0d2847] font-bold text-sm uppercase tracking-wide border-b border-slate-100 pb-3 mb-4">
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                <span>Secure Digital Voter Registration</span>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified Citizen Registration</span>
               </div>
-
-              <h1 className="text-2xl font-bold font-serif text-[#0d2847] leading-tight mb-3">
-                Your Vote, Secured & Auditable
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Create DigiVote Account
               </h1>
-
-              <p className="text-xs text-slate-600 leading-relaxed mb-4">
-                Register an official digital voter account on the DigiVote sovereign voting platform. Once registered, you will be able to complete EPIC voter identity verification and cast tamper-evident digital ballots during elections.
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Register with your legal institutional details to participate in digital elections.
               </p>
-
-              <div className="bg-[#f8fafc] border-l-4 border-[#0d2847] p-3 rounded-r text-xs text-slate-700 space-y-1">
-                <p className="font-bold text-[#0d2847]">Eligibility Criteria:</p>
-                <ul className="list-disc list-inside text-[11px] text-slate-600 space-y-0.5">
-                  <li>Must be an Indian Citizen aged 18 or above</li>
-                  <li>Possess an active Email & Mobile Number for OTP verification</li>
-                  <li>Have valid identity documents ready for verification (Module 4)</li>
-                </ul>
-              </div>
             </div>
 
-            {/* Statutory Security Standards */}
-            <div className="bg-[#0d2847] text-white rounded-lg p-5 shadow-sm space-y-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-amber-300 border-b border-blue-900 pb-2">
-                Election Commission Security Guarantees
-              </h2>
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 rounded bg-white/10 text-emerald-400 shrink-0 mt-0.5">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white">End-to-End Cryptographic Encryption</h3>
-                    <p className="text-[11px] text-slate-300">Voter choices are anonymized using zero-knowledge cryptographic safeguards.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 rounded bg-white/10 text-amber-400 shrink-0 mt-0.5">
-                    <Shield className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white">Multi-Factor Authentication (MFA)</h3>
-                    <p className="text-[11px] text-slate-300">Enforces two-step OTP verification to prevent unauthorized voter impersonation.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 rounded bg-white/10 text-blue-400 shrink-0 mt-0.5">
-                    <Award className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white">Audit Logs & Verifiable Receipts</h3>
-                    <p className="text-[11px] text-slate-300">Generates tamper-evident cryptographic receipts for independent post-election auditing.</p>
-                  </div>
-                </div>
+            {/* Error Notification */}
+            {error && (
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
-            </div>
+            )}
 
-            {/* Helpline Box */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-xs text-amber-900 flex items-center justify-between">
-              <div>
-                <p className="font-bold">Need assistance with registration?</p>
-                <p className="text-[11px] text-amber-800">Contact Election Commission Helpdesk</p>
-              </div>
-              <span className="font-extrabold text-base bg-amber-200/80 px-2.5 py-1 rounded text-amber-950">
-                1950
-              </span>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN: Official Registration Form (7 Cols) */}
-          <div className="lg:col-span-7">
-            
-            <div className="bg-white rounded-lg border border-[#d4e0eb] shadow-sm overflow-hidden">
+            <form onSubmit={handleSubmit} className="space-y-4">
               
-              {/* Form Title Banner */}
-              <div className="bg-[#f8fafc] border-b border-[#d4e0eb] p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded uppercase">
-                      New Citizen Account
-                    </span>
-                    <h2 className="text-xl font-bold font-serif text-[#0d2847] mt-1">
-                      Citizen Online Registration Form
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Please enter accurate personal information to begin identity verification.
-                    </p>
-                  </div>
-                  <FileText className="w-8 h-8 text-slate-300 hidden sm:block" />
+              {/* Full Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    placeholder="Legal Full Name"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-[#111a33] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
                 </div>
               </div>
 
-              {/* Form Body */}
-              <div className="p-6 sm:p-8">
-                <RegisterForm />
+              {/* Email Address */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  Institutional Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="name@institution.edu"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-[#111a33] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
               </div>
 
-              {/* Form Footer */}
-              <div className="bg-[#f8fafc] border-t border-[#d4e0eb] p-4 text-center text-xs text-slate-600">
-                <span>Already registered with DigiVote? </span>
-                <Link to="/login" className="font-bold text-[#0d2847] hover:underline">
-                  Sign In to Voter Dashboard
-                </Link>
+              {/* Mobile Number */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  Mobile Number
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    required
+                    value={formData.mobileNumber}
+                    onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
+                    placeholder="+1 (555) 000-0000"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-[#111a33] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
               </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Minimum 8 characters"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-[#111a33] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Password Strength Meter */}
+                {formData.password && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span>Password Strength</span>
+                      <span className="font-mono uppercase">{strengthLabels[strength]}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 h-1.5">
+                      {[1, 2, 3, 4].map((level) => (
+                        <div
+                          key={level}
+                          className={`rounded-full transition-all ${
+                            strength >= level ? strengthColors[strength] : 'bg-slate-200 dark:bg-slate-800'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    placeholder="Re-enter password"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-[#111a33] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/25 transition-all"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Creating Account...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Create Account</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+
+            <div className="text-[11px] text-slate-400 text-center leading-relaxed">
+              By registering, you agree to the verified institutional election guidelines and confidentiality charter.
             </div>
+
           </div>
 
         </div>
       </main>
 
-      {/* 5. OFFICIAL GOVERNMENT FOOTER */}
-      <footer className="w-full bg-[#0d2847] text-white border-t-4 border-[#f47c20] mt-12 py-8 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <h4 className="font-bold uppercase tracking-wider text-amber-300 mb-2">Election Commission of India</h4>
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              Nirvachan Sadan, Ashoka Road, New Delhi 110001. DigiVote is a state-of-the-art secure electronic democracy framework.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-bold uppercase tracking-wider text-amber-300 mb-2">Quick Citizen Links</h4>
-            <ul className="space-y-1 text-[11px] text-slate-300">
-              <li>&bull; Search Name in Electoral Roll (EPIC)</li>
-              <li>&bull; Voter Education & Awareness (SVEEP)</li>
-              <li>&bull; National Grievance Redressal Portal</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-bold uppercase tracking-wider text-amber-300 mb-2">Statutory Security Notice</h4>
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              All unauthorized access attempts are monitored and subject to prosecution under the Information Technology Act and Representation of the People Act.
-            </p>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 pt-4 border-t border-blue-900 text-center text-[11px] text-slate-400">
-          &copy; {new Date().getFullYear()} Election Commission of India. DigiVote Platform — All Rights Reserved.
-        </div>
+      {/* Footer */}
+      <footer className="py-6 text-center text-xs text-slate-400 border-t border-slate-200/80 dark:border-slate-800/80">
+        &copy; {new Date().getFullYear()} DigiVote Secure Digital Voting Platform
       </footer>
+
     </div>
   );
 }

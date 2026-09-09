@@ -5,28 +5,20 @@ from rest_framework import serializers
 from authentication.models import User
 from authentication.serializers import UserSerializer
 from locations.models import Constituency
-from voters.models import VoterProfile, VoterIDCard
+from voters.models import VoterProfile
 
 class ConstituencySerializer(serializers.ModelSerializer):
     class Meta:
         model = Constituency
         fields = ('id', 'name', 'description')
 
-class VoterIDCardSerializer(serializers.ModelSerializer):
-    constituency_name = serializers.CharField(source='constituency.name', read_only=True)
-
-    class Meta:
-        model = VoterIDCard
-        fields = ('id', 'card_number', 'full_name', 'date_of_birth', 'gender', 'constituency_name', 'photo_url', 'issued_date', 'status')
-
 class VoterProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     constituency_name = serializers.CharField(source='constituency.name', read_only=True)
-    voter_id_card = VoterIDCardSerializer(read_only=True, required=False, allow_null=True)
 
     class Meta:
         model = VoterProfile
-        fields = ('id', 'user', 'voter_reference', 'verification_status', 'verification_method', 'verified_at', 'constituency', 'constituency_name', 'face_photo_url', 'date_of_birth', 'gender', 'voter_id_card')
+        fields = ('id', 'user', 'voter_reference', 'verification_status', 'verification_method', 'verified_at', 'constituency', 'constituency_name', 'face_photo_url', 'date_of_birth', 'gender')
 
 class VoterRegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)

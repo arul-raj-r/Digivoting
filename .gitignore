@@ -5,6 +5,10 @@ backend/.env
 frontend/.env
 *.env.local
 
+.env
+.env.*
+!.env.example
+
 # Keep example environment files
 !.env.example
 

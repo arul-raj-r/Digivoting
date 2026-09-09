@@ -1,44 +1,66 @@
 import Badge from './Badge';
 
 export default function StatusBadge({ status, className = '' }) {
+  if (!status) return null;
   const normalized = String(status).toUpperCase();
 
-  // Status mapping to Badge variants
-  // Expected statuses: VERIFIED, ACTIVE, PENDING, COMPLETED, PROCESSING, FAILED, EXPIRED, NOT STARTED
   let variant = 'neutral';
-  let text = status;
+  let label = status;
 
   switch (normalized) {
-    case 'VERIFIED':
     case 'ACTIVE':
     case 'SUCCESS':
-    case 'COMPLETED':
+    case 'VERIFIED':
       variant = 'success';
-      text = status === 'SUCCESS' ? 'Succeeded' : status;
+      label = normalized === 'ACTIVE' ? 'Active' : normalized === 'SUCCESS' ? 'Success' : 'Verified';
       break;
+
+    case 'COMPLETED':
+      variant = 'info';
+      label = 'Completed';
+      break;
+
+    case 'SCHEDULED':
+      variant = 'info';
+      label = 'Scheduled';
+      break;
+
+    case 'CONFIGURED':
+      variant = 'info';
+      label = 'Configured';
+      break;
+
+    case 'DRAFT':
+      variant = 'neutral';
+      label = 'Draft';
+      break;
+
     case 'PENDING':
+    case 'PENDING_EMAIL_VERIFICATION':
     case 'PROCESSING':
-    case 'ENROLLED':
+    case 'UNDER_REVIEW':
       variant = 'warning';
+      label = normalized === 'PENDING_EMAIL_VERIFICATION' ? 'Email Pending' : normalized === 'UNDER_REVIEW' ? 'Under Review' : 'Pending';
       break;
+
+    case 'CANCELLED':
     case 'FAILED':
     case 'EXPIRED':
+    case 'LOCKED':
     case 'SUSPENDED':
+    case 'REJECTED':
       variant = 'danger';
+      label = normalized === 'CANCELLED' ? 'Cancelled' : normalized === 'LOCKED' ? 'Locked' : normalized === 'SUSPENDED' ? 'Suspended' : normalized === 'REJECTED' ? 'Rejected' : 'Failed';
       break;
-    case 'NOT_STARTED':
-    case 'NOT STARTED':
-    case 'UNAVAILABLE':
-      variant = 'neutral';
-      text = status === 'NOT_STARTED' ? 'Not Started' : status;
-      break;
+
     default:
-      variant = 'info';
+      variant = 'neutral';
+      label = status;
   }
 
   return (
-    <Badge variant={variant} className={className}>
-      {text}
+    <Badge variant={variant} className={`font-semibold tracking-wide ${className}`}>
+      {label}
     </Badge>
   );
 }

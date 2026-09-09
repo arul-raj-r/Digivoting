@@ -14,7 +14,8 @@ import {
   LogOut,
   Sun,
   Moon,
-  ChevronRight
+  ChevronRight,
+  PlusCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -34,15 +35,24 @@ export default function DashboardLayout({ children }) {
     navigate('/');
   };
 
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Verification Center', path: '/identity-verification', icon: UserCheck },
-    { name: 'Elections', path: '/elections', icon: Landmark },
-    { name: 'Security Center', path: '/security', icon: Shield },
-    { name: 'Results Center', path: '/results', icon: BarChart3 },
-    { name: 'Voter Profile', path: '/profile', icon: User },
-    { name: 'Help & Support', path: '/help', icon: HelpCircle },
-  ];
+  const isCreatorOrAdmin = user?.role === 'ELECTION_CREATOR' || user?.role === 'ADMIN' || user?.is_staff || user?.is_superuser;
+
+  // Role-based navigation swapping between Creator Dashboard mode and Voter Portal mode
+  const navItems = isCreatorOrAdmin
+    ? [
+        { name: 'Elections Hub', path: '/elections', icon: Landmark },
+        { name: 'Create Election', path: '/elections/create', icon: PlusCircle },
+        { name: 'Voter Portal', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Active Sessions', path: '/sessions', icon: Shield },
+        { name: 'Voter Profile', path: '/profile', icon: User },
+        { name: 'Help & Support', path: '/help', icon: HelpCircle },
+      ]
+    : [
+        { name: 'Voter Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Active Sessions', path: '/sessions', icon: Shield },
+        { name: 'Voter Profile', path: '/profile', icon: User },
+        { name: 'Help & Support', path: '/help', icon: HelpCircle },
+      ];
 
   // Helper to construct breadcrumbs based on route
   const getBreadcrumbs = () => {
@@ -70,8 +80,19 @@ export default function DashboardLayout({ children }) {
           <Link to="/" className="flex items-center gap-2 font-bold text-gov-blue dark:text-slate-100">
             <Shield className="h-6 w-6 text-gov-slate" />
             <div className="flex flex-col leading-none">
-              <span className="tracking-wide">DigiVote</span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">Secure Citizen Portal</span>
+              <div className="flex items-center gap-1.5">
+                <span className="tracking-wide">DigiVote</span>
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                  isCreatorOrAdmin
+                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300'
+                    : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300'
+                }`}>
+                  {isCreatorOrAdmin ? 'Creator' : 'Citizen'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal mt-0.5">
+                {isCreatorOrAdmin ? 'Creator Dashboard' : 'Citizen Voter Portal'}
+              </span>
             </div>
           </Link>
         </div>
@@ -83,10 +104,11 @@ export default function DashboardLayout({ children }) {
               <NavLink
                 key={item.name}
                 to={item.path}
+                end={item.path === '/elections' || item.path === '/dashboard'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-gov-blue text-white shadow-sm dark:bg-gov-slate dark:text-slate-900'
+                      ? 'bg-gov-blue text-white shadow-sm dark:bg-gov-slate dark:text-slate-900 font-semibold'
                       : 'text-slate-650 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-850 dark:hover:text-slate-100'
                   }`
                 }
@@ -133,7 +155,19 @@ export default function DashboardLayout({ children }) {
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Shield className="h-6 w-6 text-gov-slate" />
-                <span className="font-bold text-gov-blue dark:text-white">DigiVote</span>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-gov-blue dark:text-white">DigiVote</span>
+                    <span className={`text-[8px] font-bold uppercase px-1 py-0.2 rounded ${
+                      isCreatorOrAdmin ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {isCreatorOrAdmin ? 'Creator' : 'Citizen'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {isCreatorOrAdmin ? 'Creator Dashboard' : 'Citizen Voter Portal'}
+                  </span>
+                </div>
               </div>
               <button 
                 onClick={toggleSidebar} 
@@ -249,8 +283,8 @@ export default function DashboardLayout({ children }) {
                   </div>
                   <div className="max-h-60 overflow-y-auto">
                     <div className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-50 dark:border-slate-800/30">
-                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-200">Identity Verification Pending</p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Please verify your voter registration details before upcoming elections.</p>
+                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-200">Official Session Active</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Your protected session is securely authenticated.</p>
                     </div>
                     <div className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <p className="font-semibold text-xs text-slate-800 dark:text-slate-200">Security Notice: 2FA Active</p>

@@ -1,45 +1,48 @@
 import { useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Sun, Moon, Shield, Landmark } from 'lucide-react';
+import { Link, NavLink } from 'react-router-dom';
+import { Menu, X, Sun, Moon, Laptop, Shield, ArrowRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
 
 export default function PublicLayout({ children }) {
-  const { theme, toggleTheme } = useTheme();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { themeMode, cycleTheme, resolvedTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
-  const navigate = useNavigate();
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
   const links = [
     { name: 'Home', path: '/' },
-    { name: 'About', path: '/about' },
+    { name: 'About Us', path: '/about' },
+    { name: 'Features', path: '/features' },
     { name: 'How It Works', path: '/how-it-works' },
     { name: 'Security', path: '/security' },
-    { name: 'FAQ', path: '/faq' },
-    { name: 'Contact', path: '/contact' },
-    { name: 'Help', path: '/help' },
+    { name: 'Contact Us', path: '/contact' },
   ];
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
-
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-gov-dark text-slate-800 dark:text-slate-100 transition-colors duration-200">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-gov-cardDark/95 border-b border-slate-200 dark:border-slate-800 backdrop-blur">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070b14] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+      {/* Top Public Navbar */}
+      <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#070b14]/85 border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
+            
             {/* Logo */}
             <div className="flex items-center">
-              <Link to="/" className="flex items-center gap-2 text-gov-blue dark:text-slate-100 font-bold text-lg select-none">
-                <Shield className="h-6 w-6 text-gov-blue dark:text-gov-slate" />
+              <Link to="/" className="flex items-center gap-3 select-none group">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/25 group-hover:scale-105 transition-transform">
+                  <Shield className="h-5 w-5 text-white" />
+                </div>
                 <div className="flex flex-col leading-none">
-                  <span className="tracking-wide">DigiVote</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">Secure Digital Voting Platform</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
+                      DigiVote
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-bold">
+                      SECURE
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    Secure Digital Voting Platform
+                  </span>
                 </div>
               </Link>
             </div>
@@ -50,11 +53,12 @@ export default function PublicLayout({ children }) {
                 <NavLink
                   key={link.name}
                   to={link.path}
+                  end={link.path === '/'}
                   className={({ isActive }) =>
-                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       isActive
-                        ? 'text-gov-blue dark:text-gov-slate bg-slate-100 dark:bg-slate-800/50'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-gov-blue dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50'
                     }`
                   }
                 >
@@ -63,65 +67,69 @@ export default function PublicLayout({ children }) {
               ))}
             </nav>
 
-            {/* Actions */}
+            {/* Right Tools: Theme Toggle + Login + Get Started */}
             <div className="hidden md:flex items-center gap-3">
+              {/* 3-Mode Theme Button */}
               <button
-                onClick={toggleTheme}
-                className="p-2 rounded-full text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
-                aria-label="Toggle theme"
+                type="button"
+                onClick={cycleTheme}
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                title={`Theme: ${themeMode.toUpperCase()} (Click to cycle Light / Dark / System)`}
+                aria-label="Toggle Theme"
               >
-                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                {themeMode === 'system' ? (
+                  <Laptop className="h-4 w-4 text-indigo-500" />
+                ) : resolvedTheme === 'dark' ? (
+                  <Moon className="h-4 w-4 text-indigo-400" />
+                ) : (
+                  <Sun className="h-4 w-4 text-amber-500" />
+                )}
+                <span className="text-[11px] uppercase font-mono tracking-wider text-slate-400">
+                  {themeMode}
+                </span>
               </button>
 
-              {isAuthenticated ? (
-                <div className="flex items-center gap-3">
-                  <Link
-                    to={user?.role === 'ADMIN' ? '/admin' : '/dashboard'}
-                    className="bg-gov-blue hover:bg-gov-darkblue text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
-                  >
-                    Dashboard
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="border border-slate-350 dark:border-slate-700 text-slate-600 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Link
-                    to="/login"
-                    className="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="bg-gov-blue hover:bg-gov-darkblue text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
-                  >
-                    Register
-                  </Link>
-                </div>
-              )}
+              <div className="h-5 w-px bg-slate-200 dark:border-slate-800" />
+
+              <Link
+                to="/login"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 px-3.5 py-2 rounded-xl transition-colors"
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/25 transition-all hover:shadow-indigo-600/35"
+              >
+                <span>Get Started</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
             {/* Mobile menu button */}
             <div className="flex md:hidden items-center gap-2">
               <button
-                onClick={toggleTheme}
-                className="p-2 rounded-full text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                type="button"
+                onClick={cycleTheme}
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                 aria-label="Toggle theme"
               >
-                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                {themeMode === 'system' ? (
+                  <Laptop className="h-4 w-4 text-indigo-500" />
+                ) : resolvedTheme === 'dark' ? (
+                  <Moon className="h-4 w-4 text-indigo-400" />
+                ) : (
+                  <Sun className="h-4 w-4 text-amber-500" />
+                )}
               </button>
               <button
+                type="button"
                 onClick={toggleMenu}
-                className="inline-flex items-center justify-center p-2 rounded-md text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="inline-flex items-center justify-center p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-expanded={isOpen}
                 aria-label="Toggle main menu"
               >
-                {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
             </div>
           </div>
@@ -129,121 +137,100 @@ export default function PublicLayout({ children }) {
 
         {/* Mobile Navigation Drawer */}
         {isOpen && (
-          <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-gov-cardDark px-2 pt-2 pb-4 space-y-1 sm:px-3">
+          <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1527] px-4 pt-3 pb-6 space-y-2">
             {links.map((link) => (
               <NavLink
                 key={link.name}
                 to={link.path}
+                end={link.path === '/'}
                 onClick={() => setIsOpen(false)}
                 className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-base font-medium ${
+                  `block px-3 py-2 rounded-lg text-sm font-semibold ${
                     isActive
-                      ? 'text-gov-blue dark:text-gov-slate bg-slate-100 dark:bg-slate-800'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-gov-blue dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`
                 }
               >
                 {link.name}
               </NavLink>
             ))}
-            <div className="pt-4 pb-2 border-t border-slate-200 dark:border-slate-800 mt-2 px-3 flex flex-col gap-2">
-              {isAuthenticated ? (
-                <>
-                  <Link
-                    to={user?.role === 'ADMIN' ? '/admin' : '/dashboard'}
-                    onClick={() => setIsOpen(false)}
-                    className="w-full text-center bg-gov-blue hover:bg-gov-darkblue text-white px-4 py-2 rounded-md text-base font-medium"
-                  >
-                    Dashboard
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setIsOpen(false);
-                      handleLogout();
-                    }}
-                    className="w-full text-center border border-slate-350 dark:border-slate-700 text-slate-650 dark:text-slate-300 px-4 py-2 rounded-md text-base font-medium"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to="/login"
-                    onClick={() => setIsOpen(false)}
-                    className="w-full text-center border border-slate-300 dark:border-slate-700 text-slate-605 dark:text-slate-300 px-4 py-2 rounded-md text-base font-medium"
-                  >
-                    Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    onClick={() => setIsOpen(false)}
-                    className="w-full text-center bg-gov-blue hover:bg-gov-darkblue text-white px-4 py-2 rounded-md text-base font-medium"
-                  >
-                    Register
-                  </Link>
-                </>
-              )}
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+              <Link
+                to="/login"
+                onClick={() => setIsOpen(false)}
+                className="w-full text-center py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                onClick={() => setIsOpen(false)}
+                className="w-full text-center bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-600/25"
+              >
+                Get Started
+              </Link>
             </div>
           </div>
         )}
       </header>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main className="flex-grow">
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
+      {/* Professional Footer */}
+      <footer className="bg-slate-900 dark:bg-[#050811] text-slate-400 py-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-white font-semibold">
-                <Landmark className="h-6 w-6 text-gov-slate" />
-                <span className="tracking-wide">DigiVote</span>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-white font-bold text-base">
+                <Shield className="h-5 w-5 text-indigo-400" />
+                <span>DigiVote</span>
               </div>
-              <p className="text-xs text-slate-400">
-                Secure Digital Voting Platform designed for secure, auditable, and accessible public elections.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Secure Digital Voting Platform built for modern organizations to conduct verified, confidential, and auditable digital elections.
               </p>
-              <div className="text-[11px] text-slate-500">
-                This is a secure citizen service demo portal. Not affiliated with any government agency.
+              <div className="text-[11px] text-slate-500 font-mono">
+                Institutional Digital Voting Platform
               </div>
             </div>
             
             <div>
-              <h3 className="text-white text-sm font-semibold mb-4">Service Links</h3>
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Navigation</h3>
               <ul className="space-y-2 text-xs">
-                <li><Link to="/about" className="hover:text-white transition-colors">About the Platform</Link></li>
-                <li><Link to="/how-it-works" className="hover:text-white transition-colors">How it Works</Link></li>
+                <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
+                <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
+                <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
+                <li><Link to="/how-it-works" className="hover:text-white transition-colors">How It Works</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Platform</h3>
+              <ul className="space-y-2 text-xs">
                 <li><Link to="/security" className="hover:text-white transition-colors">Security Architecture</Link></li>
-                <li><Link to="/results" className="hover:text-white transition-colors">Public Election Results</Link></li>
+                <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+                <li><Link to="/login" className="hover:text-white transition-colors">Voter & Organizer Login</Link></li>
+                <li><Link to="/register" className="hover:text-white transition-colors">Get Started</Link></li>
               </ul>
             </div>
 
             <div>
-              <h3 className="text-white text-sm font-semibold mb-4">Voter Support</h3>
-              <ul className="space-y-2 text-xs">
-                <li><Link to="/faq" className="hover:text-white transition-colors">Frequently Asked Questions</Link></li>
-                <li><Link to="/help" className="hover:text-white transition-colors">Voter Help Center</Link></li>
-                <li><Link to="/contact" className="hover:text-white transition-colors">Contact Election Support</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-white text-sm font-semibold mb-4">Security Standards</h3>
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Security Principles</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                DigiVote uses client-side Device Biometric / WebAuthn and Face Verification in coordination with multi-factor OTP tokens.
+                DigiVote integrates Email OTP MFA, webcam face verification, confidential ballot handling with time-truncated submission records, and end-to-end audit logging.
               </p>
             </div>
           </div>
 
-          <div className="border-t border-slate-800 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
-            <p>&copy; {new Date().getFullYear()} DigiVote. All rights reserved.</p>
-            <div className="flex gap-4 mt-4 sm:mt-0">
-              <a href="#" className="hover:text-slate-350">Privacy Policy</a>
-              <a href="#" className="hover:text-slate-355">Terms of Service</a>
-              <a href="#" className="hover:text-slate-360">Accessibility Statement</a>
+          <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
+            <p>&copy; {new Date().getFullYear()} DigiVote. Secure Digital Voting Platform. All rights reserved.</p>
+            <div className="flex gap-6">
+              <span className="text-slate-500">Privacy Policy</span>
+              <span className="text-slate-500">Terms of Service</span>
+              <span className="text-slate-500">Security Architecture</span>
             </div>
           </div>
         </div>
@@ -251,3 +238,4 @@ export default function PublicLayout({ children }) {
     </div>
   );
 }
+

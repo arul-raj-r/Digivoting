@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Check, AlertCircle, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 import PasswordStrengthMeter from './PasswordStrengthMeter';
 import { register } from '../../api/auth';
+import GoogleAuthButton from './GoogleAuthButton';
 
 export default function RegisterForm() {
   const navigate = useNavigate();
@@ -146,7 +147,7 @@ export default function RegisterForm() {
       {/* Full Legal Name */}
       <div className="space-y-1">
         <label htmlFor="fullName" className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
-          Full Legal Name (as per EPIC / Voter Card) <span className="text-red-600">*</span>
+          Full Legal Name (as per Official Government Records) <span className="text-red-600">*</span>
         </label>
         <div className="relative">
           <input
@@ -368,6 +369,22 @@ export default function RegisterForm() {
           )}
         </button>
       </div>
+
+      {/* OR DIVIDER */}
+      <div className="relative flex items-center justify-center my-3">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-slate-200"></div>
+        </div>
+        <span className="relative bg-white px-3 text-[10px] uppercase font-bold text-slate-400 select-none">
+          Or Register With
+        </span>
+      </div>
+
+      {/* Google Sign-in Real Integration (Module 3) */}
+      <div className="pt-1">
+        <GoogleAuthButton disabled={isSubmitting} text="Sign up with Google" />
+      </div>
+
     </form>
   );
 }

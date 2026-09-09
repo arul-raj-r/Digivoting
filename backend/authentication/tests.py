@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from authentication.models import User, OTPVerification
 from locations.models import State, District, Constituency
-from voters.models import VoterProfile, VoterIDCard
+from voters.models import VoterProfile
 
 class DigiVoteBackendTests(TransactionTestCase):
     def setUp(self):
@@ -178,8 +178,8 @@ class DigiVoteBackendTests(TransactionTestCase):
         self.assertTrue(Constituency.objects.filter(name__contains="DEMO").exists())
         self.assertTrue(User.objects.filter(username="voter1").exists())
 
-    def test_card_generation_on_approval(self):
-        """13. Verify voter certification and ID card issuance sequence"""
+    def test_voter_verification_on_approval(self):
+        """13. Verify voter certification sequence"""
         voter_profile = VoterProfile.objects.get(user=self.voter_user)
         voter_profile.constituency = self.constituency
         voter_profile.date_of_birth = date(1995, 8, 15)
@@ -189,13 +189,7 @@ class DigiVoteBackendTests(TransactionTestCase):
         self.client.force_authenticate(user=self.admin_user)
         url = reverse('v1:voter_verify', args=[voter_profile.id])
         
-        self.assertFalse(VoterIDCard.objects.filter(voter=voter_profile).exists())
-        
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
-        self.assertTrue(VoterIDCard.objects.filter(voter=voter_profile).exists())
-        card = VoterIDCard.objects.get(voter=voter_profile)
-        self.assertIsNotNone(card.card_number)
-        self.assertEqual(card.full_name, "Ramesh Kumar")
-        self.assertEqual(card.status, "ACTIVE")
+        voter_profile.refresh_from_db()
+        self.assertEqual(voter_profile.verification_status, 'VERIFIED')

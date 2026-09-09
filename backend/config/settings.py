@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     
     # Third party apps
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_filters',
     'drf_spectacular',
@@ -50,7 +51,6 @@ INSTALLED_APPS = [
     # Project modular apps
     'accounts.apps.AccountsConfig',
     'authentication.apps.AuthenticationConfig',
-    'identity.apps.IdentityConfig',
     'voters.apps.VotersConfig',
     'locations.apps.LocationsConfig',
     'elections.apps.ElectionsConfig',
@@ -78,7 +78,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -101,17 +101,37 @@ if 'test' in sys.argv:
 if not db_url:
     raise ImproperlyConfigured("DATABASE_URL environment variable is required and must not be empty.")
 
+# When connecting through Supabase transaction pooler (pgbouncer on port 6543 or pooler.supabase.com),
+# persistent connections (conn_max_age > 0) cause "server closed the connection unexpectedly"
+# and server-side cursors are not supported by pgbouncer in transaction mode.
+is_pooler = 'pooler.supabase.com' in db_url or ':6543' in db_url
+default_conn_max_age = 0 if is_pooler else 600
+conn_max_age = env.int('DB_CONN_MAX_AGE', default=default_conn_max_age)
+
 DATABASES = {
     'default': dj_database_url.parse(
         db_url,
-        conn_max_age=600,
+        conn_max_age=conn_max_age,
     )
 }
+
+if is_pooler or 'postgresql' in DATABASES['default'].get('ENGINE', ''):
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
+if 'sqlite' in DATABASES['default']['ENGINE']:
+    DATABASES['default'].setdefault('OPTIONS', {})['timeout'] = 30
 
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.User'
 
-# Password validation
+# Password validation & Secure Hashing (Module 7: Argon2 preferred)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -133,15 +153,38 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
+# Static & Media Storage Configuration (Module 9 Storage Abstraction)
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+USE_S3 = env.bool('USE_S3', default=False)
+
+if USE_S3:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "bucket_name": env('AWS_STORAGE_BUCKET_NAME', default=''),
+                "region_name": env('AWS_S3_REGION_NAME', default='ap-south-1'),
+                "endpoint_url": env('AWS_S3_ENDPOINT_URL', default=None),
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 # CORS & CSRF Configuration
 CORS_ALLOW_ALL_ORIGINS = False
@@ -168,7 +211,7 @@ else:
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'accounts.authentication.SessionJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -201,9 +244,9 @@ SPECTACULAR_SETTINGS = {
 # SimpleJWT configuration
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'VERIFYING_KEY': None,
@@ -223,13 +266,13 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Email configurations
-EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = env('EMAIL_HOST', default='localhost')
-EMAIL_PORT = env.int('EMAIL_PORT', default=25)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=False)
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@digivote.gov.in')
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='').strip()
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='').replace(' ', '').strip()
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER or 'noreply@digivote.org')
 
 # Google OAuth settings
 GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID', default='')
@@ -237,3 +280,11 @@ GOOGLE_CLIENT_SECRET = env('GOOGLE_CLIENT_SECRET', default='')
 
 # Frontend URL (for email verification/reset links)
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')
+
+# OTP and Verification Constraints (Modules 4 & 5)
+OTP_EXPIRY_SECONDS = env.int('OTP_EXPIRY_SECONDS', default=300) # 5 minutes
+OTP_RESEND_COOLDOWN_SECONDS = env.int('OTP_RESEND_COOLDOWN_SECONDS', default=30)
+OTP_MAX_ATTEMPTS = env.int('OTP_MAX_ATTEMPTS', default=3)
+EMAIL_VERIFICATION_EXPIRY_HOURS = env.int('EMAIL_VERIFICATION_EXPIRY_HOURS', default=24)
+PASSWORD_RESET_EXPIRY_MINUTES = env.int('PASSWORD_RESET_EXPIRY_MINUTES', default=60)
+

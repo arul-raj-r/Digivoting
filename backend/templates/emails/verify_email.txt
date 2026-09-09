@@ -1,0 +1,14 @@
+भारत निर्वाचन आयोग
+Election Commission of India — DigiVote Portal
+
+Citizen {{ user_full_name }},
+
+Thank you for registering your profile on the DigiVote Sovereign Digital Democracy Network. To activate your account and access digital voting services, please confirm your email address by visiting the following link:
+
+{{ verification_url }}
+
+Statutory Notice: This activation link is valid for 24 hours. If you did not initiate this registration, please contact the National Voter Helpline at 1950 immediately.
+
+---
+Election Commission of India • Nirvachan Sadan, Ashoka Road, New Delhi 110001.
+This is an automated system notification. Please do not reply directly.

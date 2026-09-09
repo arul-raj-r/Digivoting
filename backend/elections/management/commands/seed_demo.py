@@ -3,192 +3,298 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import timedelta
 from authentication.models import User, UserProfile
-from voters.models import VoterProfile, VoterIDCard
+from voters.models import VoterProfile
 from locations.models import State, District, Constituency, PollingStation
-from elections.models import Election, ElectionPhase
-from candidates.models import PoliticalParty, Candidate, ElectionCandidate
-from voting.models import Vote, VoteReceipt, VoteTransaction
+from elections.models import (
+    Election,
+    EligibleVoter,
+    Candidate as ElectionCandidateModel,
+    ElectionVerificationConfig,
+    ElectionRules
+)
+from voting.models import (
+    Ballot,
+    ElectionEncryptionKey,
+    ElectionResult,
+    CandidateResult,
+    BallotConfirmationToken
+)
+from voting.crypto import generate_election_key
 
 class Command(BaseCommand):
-    help = 'Seeds the database with synthetic demo data for DigiVote local audits.'
+    help = 'Seeds the database with synthetic organizational demo data for DigiVote.'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write("Initializing demo data seeding...")
+        self.stdout.write("Initializing organizational demo data seeding...")
 
         # 1. Clear existing data in correct dependency order
         self.stdout.write("Clearing existing records...")
-        VoteReceipt.objects.all().delete()
-        VoteTransaction.objects.all().delete()
-        Vote.objects.all().delete()
-        ElectionCandidate.objects.all().delete()
-        Candidate.objects.all().delete()
-        PoliticalParty.objects.all().delete()
-        ElectionPhase.objects.all().delete()
+        CandidateResult.objects.all().delete()
+        ElectionResult.objects.all().delete()
+        BallotConfirmationToken.objects.all().delete()
+        Ballot.objects.all().delete()
+        ElectionEncryptionKey.objects.all().delete()
+        ElectionCandidateModel.objects.all().delete()
+        EligibleVoter.objects.all().delete()
+        ElectionRules.objects.all().delete()
+        ElectionVerificationConfig.objects.all().delete()
         Election.objects.all().delete()
-        VoterIDCard.objects.all().delete()
         VoterProfile.objects.all().delete()
         UserProfile.objects.all().delete()
-        
-        # Clear Locations
+
+        # Clear Locations (legacy cleanup)
         PollingStation.objects.all().delete()
         Constituency.objects.all().delete()
         District.objects.all().delete()
         State.objects.all().delete()
-        
-        # Deleting all users except active superusers if any
+
+        # Deleting users
         User.objects.filter(is_superuser=False).delete()
-        User.objects.filter(username="admin").delete()
+        User.objects.filter(username__in=["admin", "creator", "voter1", "voter2", "voter3"]).delete()
 
-        # 2. Create Location Hierarchy
-        self.stdout.write("Creating location structures...")
-        s1 = State.objects.create(name="DEMO State (Tamil Nadu)")
-        
-        dist1 = District.objects.create(state=s1, name="DEMO District (Chennai)")
-        dist2 = District.objects.create(state=s1, name="DEMO District (Madurai)")
-        dist3 = District.objects.create(state=s1, name="DEMO District (Coimbatore)")
-        
-        c1 = Constituency.objects.create(district=dist1, name="DEMO Constituency (Chennai Central)", description="Central Parliamentary Constituency")
-        c2 = Constituency.objects.create(district=dist2, name="DEMO Constituency (Madurai North)", description="Madurai Assembly Constituency")
-        c3 = Constituency.objects.create(district=dist3, name="DEMO Constituency (Coimbatore South)", description="Coimbatore Assembly Constituency")
-        
-        PollingStation.objects.create(constituency=c1, name="DEMO Polling Station #45", address="Chennai Central Community Hall")
-        PollingStation.objects.create(constituency=c2, name="DEMO Polling Station #12", address="Madurai North Higher Secondary School")
-        PollingStation.objects.create(constituency=c3, name="DEMO Polling Station #88", address="Coimbatore South Municipal Library")
-
-        # 3. Create Admin User
-        self.stdout.write("Creating admin user...")
+        # 2. Create Admin & Creator Users
+        self.stdout.write("Creating administrator and election creator accounts...")
         admin = User.objects.create_superuser(
             username="admin",
             password="password123",
-            email="admin@digivote.gov.in",
-            first_name="Election",
-            last_name="Commissioner",
+            email="admin@digivote.app",
+            first_name="System",
+            last_name="Admin",
             role=User.ADMIN,
             email_verified=True,
             account_status='ACTIVE'
         )
-        self.stdout.write(self.style.SUCCESS("Admin created: admin@digivote.gov.in / password123 (username: admin)"))
+        self.stdout.write(self.style.SUCCESS("Admin created: admin@digivote.app / password123"))
 
-        # 4. Create Voters & VoterProfiles
-        self.stdout.write("Creating citizen profiles...")
-        
-        # Verified Voter in Chennai Central
+        creator = User.objects.create_user(
+            username="creator",
+            password="password123",
+            email="creator@digivote.app",
+            first_name="Alex",
+            last_name="Morgan",
+            role=User.ELECTION_CREATOR,
+            email_verified=True,
+            account_status='ACTIVE'
+        )
+        self.stdout.write(self.style.SUCCESS("Creator created: creator@digivote.app / password123"))
+
+        # 3. Create Voters and Demo Constituency
+        self.stdout.write("Creating organization voter profiles...")
+        demo_state, _ = State.objects.get_or_create(name="DEMO Region")
+        demo_district, _ = District.objects.get_or_create(state=demo_state, name="DEMO District")
+        demo_constituency, _ = Constituency.objects.get_or_create(district=demo_district, name="DEMO Central", defaults={'description': 'Demo Organization Voting Precinct'})
+
         v1_user = User.objects.create_user(
             username="voter1",
             password="password123",
-            email="voter1@mail.com",
-            first_name="Ramesh",
-            last_name="Kumar",
+            email="voter1@digivote.app",
+            first_name="Jordan",
+            last_name="Lee",
             role=User.VOTER,
             email_verified=True,
             account_status='ACTIVE'
         )
-        v1 = VoterProfile.objects.create(
-            user=v1_user,
-            voter_reference="VT982001",
-            constituency=c1,
-            verification_status='VERIFIED',
-            verification_method='MANUAL',
-            verified_at=timezone.now(),
-            verified_by=admin
-        )
+        v1_profile, _ = VoterProfile.objects.get_or_create(user=v1_user)
+        v1_profile.constituency = demo_constituency
+        v1_profile.verification_status = 'VERIFIED'
+        v1_profile.save()
 
-        # Unverified Voter in Madurai North
         v2_user = User.objects.create_user(
             username="voter2",
             password="password123",
-            email="voter2@mail.com",
-            first_name="Priya",
-            last_name="Dharshini",
+            email="voter2@digivote.app",
+            first_name="Sam",
+            last_name="Taylor",
             role=User.VOTER,
             email_verified=True,
             account_status='ACTIVE'
         )
-        v2 = VoterProfile.objects.create(
-            user=v2_user,
-            voter_reference="VT982002",
-            constituency=c2,
-            verification_status='PENDING'
-        )
+        v2_profile, _ = VoterProfile.objects.get_or_create(user=v2_user)
+        v2_profile.constituency = demo_constituency
+        v2_profile.verification_status = 'VERIFIED'
+        v2_profile.save()
 
-        # Verified Voter in Coimbatore South
         v3_user = User.objects.create_user(
             username="voter3",
             password="password123",
-            email="voter3@mail.com",
-            first_name="Karthik",
-            last_name="Raja",
+            email="voter3@digivote.app",
+            first_name="Casey",
+            last_name="Rivers",
             role=User.VOTER,
             email_verified=True,
             account_status='ACTIVE'
         )
-        v3 = VoterProfile.objects.create(
-            user=v3_user,
-            voter_reference="VT982003",
-            constituency=c3,
-            verification_status='VERIFIED',
-            verification_method='MANUAL',
-            verified_at=timezone.now(),
-            verified_by=admin
-        )
+        v3_profile, _ = VoterProfile.objects.get_or_create(user=v3_user)
+        v3_profile.constituency = demo_constituency
+        v3_profile.verification_status = 'VERIFIED'
+        v3_profile.save()
 
-        self.stdout.write("Voter profiles seeded:")
-        self.stdout.write(" - voter1@mail.com / password123 (Verified, Chennai Central)")
-        self.stdout.write(" - voter2@mail.com / password123 (Pending, Madurai North)")
-        self.stdout.write(" - voter3@mail.com / password123 (Verified, Coimbatore South)")
+        self.stdout.write(self.style.SUCCESS("Voters seeded:"))
+        self.stdout.write(" - voter1@digivote.app / password123")
+        self.stdout.write(" - voter2@digivote.app / password123")
+        self.stdout.write(" - voter3@digivote.app / password123")
 
-        # 5. Create Political Parties
-        self.stdout.write("Creating political party allocations...")
-        p1 = PoliticalParty.objects.create(name="DEMO Secular Progressive Front", symbol_tag="SPF")
-        p2 = PoliticalParty.objects.create(name="DEMO Democratic People Alliance", symbol_tag="DPA")
-        p3 = PoliticalParty.objects.create(name="DEMO Farmers Right Collective", symbol_tag="FRC")
+        now = timezone.now()
 
-        # 6. Create Nominees
-        self.stdout.write("Creating contesting candidates...")
-        cand1 = Candidate.objects.create(name="Anbuchelvan S.", party=p1, bio="Committed to regional infrastructure and smart city development.")
-        cand2 = Candidate.objects.create(name="Meenakshi Sundaram", party=p2, bio="Focusing on education reforms and healthcare access.")
-        cand3 = Candidate.objects.create(name="Veerapandian K.", party=p3, bio="Advocating for farmers pricing, smart agriculture, and lake restorations.")
-
-        # 7. Create Elections & Phase details
-        self.stdout.write("Scheduling elections...")
+        # 4. Create Active Election: "Student Council Election 2025"
+        self.stdout.write("Creating active election: Student Council Election 2025...")
         el_active = Election.objects.create(
-            name="DEMO General Lok Sabha Election 2026",
-            description="Active nationwide parliamentary polls. Review candidate profiles.",
-            election_type='GENERAL',
-            start_datetime=timezone.now() - timedelta(hours=2),
-            end_datetime=timezone.now() + timedelta(days=2),
-            status='ACTIVE'
+            created_by=creator,
+            title="Student Council Election 2025",
+            description="Annual campus student council vote. Cast your ballot for the next student body representative.",
+            election_type='academic',
+            start_datetime=now - timedelta(hours=2),
+            end_datetime=now + timedelta(days=2),
+            actual_start_at=now - timedelta(hours=2),
+            status='active',
+            is_locked=True
         )
-        ElectionPhase.objects.create(
+        generate_election_key(el_active)
+
+        ElectionVerificationConfig.objects.filter(election=el_active).update(
+            require_email_otp=False,
+            require_webcam_verification=False,
+            require_biometric_verification=False
+        )
+        ElectionRules.objects.filter(election=el_active).update(
+            results_visibility='immediate',
+            allow_vote_change=False
+        )
+
+        cand1 = ElectionCandidateModel.objects.create(
             election=el_active,
-            name="General Polling Phase 1",
-            start_datetime=el_active.start_datetime,
-            end_datetime=el_active.end_datetime,
-            status='ACTIVE'
+            full_name="Sarah Chen",
+            party_or_affiliation="Computer Science Dept",
+            bio="Committed to campus sustainability, 24/7 library hours, and modern lab resources.",
+            display_order=1
+        )
+        cand2 = ElectionCandidateModel.objects.create(
+            election=el_active,
+            full_name="Marcus Brody",
+            party_or_affiliation="Business & Economics",
+            bio="Advocating for expanded student grants, career workshops, and transparent budgeting.",
+            display_order=2
         )
 
+        EligibleVoter.objects.create(election=el_active, email="voter1@digivote.app", user=v1_user, has_voted=False)
+        EligibleVoter.objects.create(election=el_active, email="voter2@digivote.app", user=v2_user, has_voted=False)
+        EligibleVoter.objects.create(election=el_active, email="voter3@digivote.app", user=v3_user, has_voted=False)
+
+        # 5. Create Scheduled Election: "Class Representative Election"
+        self.stdout.write("Creating scheduled election: Class Representative Election...")
         el_scheduled = Election.objects.create(
-            name="DEMO State Assembly By-Elections 2026",
-            description="Scheduled assembly by-polls.",
-            election_type='BY_ELECTION',
-            start_datetime=timezone.now() + timedelta(days=5),
-            end_datetime=timezone.now() + timedelta(days=6),
-            status='SCHEDULED'
+            created_by=creator,
+            title="Class Representative Election",
+            description="Nominee selection for Semester 5 Class Representative.",
+            election_type='academic',
+            start_datetime=now + timedelta(days=1),
+            end_datetime=now + timedelta(days=3),
+            status='scheduled',
+            is_locked=False
+        )
+        generate_election_key(el_scheduled)
+
+        ElectionVerificationConfig.objects.filter(election=el_scheduled).update(
+            require_email_otp=False,
+            require_webcam_verification=False
+        )
+        ElectionRules.objects.filter(election=el_scheduled).update(
+            results_visibility='scheduled',
+            results_visible_at=now + timedelta(days=3, hours=1),
+            allow_vote_change=False
         )
 
+        ElectionCandidateModel.objects.create(
+            election=el_scheduled,
+            full_name="David Kim",
+            party_or_affiliation="Section A",
+            bio="Focusing on study circle coordination and peer mentoring initiatives.",
+            display_order=1
+        )
+        ElectionCandidateModel.objects.create(
+            election=el_scheduled,
+            full_name="Priya Patel",
+            party_or_affiliation="Section B",
+            bio="Dedicated to project milestone reminders and open communication channels.",
+            display_order=2
+        )
+
+        EligibleVoter.objects.create(election=el_scheduled, email="voter1@digivote.app", user=v1_user, has_voted=False)
+        EligibleVoter.objects.create(election=el_scheduled, email="voter2@digivote.app", user=v2_user, has_voted=False)
+
+        # 6. Create Completed Election: "Best Employee of the Month Poll"
+        self.stdout.write("Creating completed election: Best Employee of the Month Poll...")
         el_completed = Election.objects.create(
-            name="DEMO Constituency Development Poll 2025",
-            description="Completed developmental voting outcomes.",
-            election_type='MUNICIPAL',
-            start_datetime=timezone.now() - timedelta(days=10),
-            end_datetime=timezone.now() - timedelta(days=8),
-            status='COMPLETED'
+            created_by=creator,
+            title="Best Employee of the Month Poll",
+            description="Workplace recognition poll celebrating outstanding team collaboration and leadership.",
+            election_type='workplace',
+            start_datetime=now - timedelta(days=7),
+            end_datetime=now - timedelta(days=1),
+            actual_start_at=now - timedelta(days=7),
+            status='completed',
+            is_locked=True
+        )
+        generate_election_key(el_completed)
+
+        ElectionVerificationConfig.objects.filter(election=el_completed).update(
+            require_email_otp=False,
+            require_webcam_verification=False
+        )
+        ElectionRules.objects.filter(election=el_completed).update(
+            results_visibility='immediate',
+            allow_vote_change=False
         )
 
-        # 8. Map candidates to constituency seats in active election
-        self.stdout.write("Binding candidates to active election seats...")
-        ElectionCandidate.objects.create(election=el_active, candidate=cand1, constituency=c1, is_approved=True)
-        ElectionCandidate.objects.create(election=el_active, candidate=cand2, constituency=c1, is_approved=True)
-        ElectionCandidate.objects.create(election=el_active, candidate=cand3, constituency=c2, is_approved=True)
+        c_emp1 = ElectionCandidateModel.objects.create(
+            election=el_completed,
+            full_name="Elena Rostova",
+            party_or_affiliation="Engineering Team",
+            bio="Delivered key platform reliability upgrades with zero downtime.",
+            display_order=1
+        )
+        c_emp2 = ElectionCandidateModel.objects.create(
+            election=el_completed,
+            full_name="James Wilson",
+            party_or_affiliation="Design & UX",
+            bio="Spearheaded intuitive interface enhancements and accessibility audits.",
+            display_order=2
+        )
 
-        self.stdout.write(self.style.SUCCESS("Demo database seed complete."))
+        EligibleVoter.objects.create(election=el_completed, email="voter1@digivote.app", user=v1_user, has_voted=True)
+        EligibleVoter.objects.create(election=el_completed, email="voter2@digivote.app", user=v2_user, has_voted=True)
+
+        # Create certified result for completed election
+        res, _ = ElectionResult.objects.get_or_create(
+            election=el_completed,
+            defaults={
+                'total_ballots_cast': 2,
+                'integrity_verified': True,
+                'is_published': True,
+                'published_at': now - timedelta(days=1)
+            }
+        )
+        CandidateResult.objects.create(election_result=res, candidate=c_emp1, vote_count=2)
+        CandidateResult.objects.create(election_result=res, candidate=c_emp2, vote_count=0)
+
+        # 7. Create Draft Election: "Club President Election"
+        self.stdout.write("Creating draft election: Club President Election...")
+        el_draft = Election.objects.create(
+            created_by=creator,
+            title="Club President Election",
+            description="Upcoming leadership election for the Robotics & AI Society.",
+            election_type='club',
+            status='draft',
+            is_locked=False
+        )
+        generate_election_key(el_draft)
+        ElectionVerificationConfig.objects.filter(election=el_draft).update(
+            require_email_otp=True,
+            require_webcam_verification=False
+        )
+        ElectionRules.objects.filter(election=el_draft).update(
+            results_visibility='manual',
+            allow_vote_change=False
+        )
+
+        self.stdout.write(self.style.SUCCESS("Organizational demo database seed complete."))

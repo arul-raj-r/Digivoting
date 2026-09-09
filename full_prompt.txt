@@ -1,0 +1,1429 @@
+<USER_REQUEST>
+# DIGIVOTE – REMAINING MODULES COMPLETE BUILD PROMPT
+
+## IMPORTANT PROJECT CONTEXT
+
+We are building **DigiVote – Secure and Intelligent Online Voting Platform**.
+
+The project technology stack is:
+
+* Frontend: React.js + Vite
+* Backend: Python 3.11 + Django
+* API: Django REST Framework
+* Database: PostgreSQL
+* Face Verification: OpenCV + Face Recognition / ArcFace
+* Authentication: Google OAuth + OTP
+* Development: VS Code + Git
+* API Testing: Postman
+
+### CRITICAL INSTRUCTION
+
+The **Authentication Module is ALREADY BUILT and WORKING**.
+
+DO NOT rebuild, replace, redesign, duplicate, or break the existing authentication system.
+
+Do not create another:
+
+* Register page
+* Login page
+* Google authentication flow
+* Email verification flow
+* OTP authentication flow
+* Session management system
+* Authentication database
+* Authentication API
+
+Reuse the existing authenticated user/session/JWT/authentication system wherever required.
+
+Your task is to build **EVERYTHING AFTER AUTHENTICATION**, except the AI Chatbot.
+
+---
+
+# MODULES TO BUILD
+
+Build these four modules completely:
+
+1. ELECTION CREATION MODULE
+2. VOTER VERIFICATION MODULE
+3. VOTING MODULE
+4. RESULT & REPORT MODULE
+
+DO NOT BUILD:
+
+* AI Chatbot Module
+* New Authentication Module
+* New Login/Register system
+
+---
+
+# 1. ELECTION CREATION MODULE
+
+## Purpose
+
+Election creators/admins must be able to create, configure, schedule, manage, monitor and control elections.
+
+The module must support complete election lifecycle management.
+
+## Election Creation
+
+Create an election with:
+
+* Election name
+* Election description
+* Election type
+* Constituency
+* Start date
+* Start time
+* End date
+* End time
+* Election status
+* Election rules
+* Election instructions
+* Voting eligibility criteria
+* Candidate configuration
+* Voter configuration
+* Verification configuration
+
+Possible election states:
+
+* Draft
+* Scheduled
+* Active
+* Paused
+* Completed
+* Cancelled
+
+---
+
+# Election Type Configuration
+
+Allow the election creator/admin to configure the election type.
+
+Examples:
+
+* College Election
+* Department Election
+* Class Representative Election
+* Organization Election
+* Custom Election
+
+The system must be designed so additional election types can be added later.
+
+---
+
+# Voter Configuration
+
+Election creators must be able to:
+
+* Add voters
+* Import voters
+* Remove voters
+* Search voters
+* Filter voters
+* View voter details
+* Check voter eligibility
+* Assign voters to an election
+* Prevent unauthorized voters from voting
+
+Do not duplicate authentication.
+
+A voter is an authenticated DigiVote user, and election eligibility must be handled separately.
+
+---
+
+# Candidate Configuration
+
+Election creators must be able to:
+
+* Add candidates
+* Edit candidates
+* Remove candidates
+* Upload candidate profile image
+* Add candidate name
+* Add candidate description
+* Add candidate manifesto/details
+* Assign candidates to an election
+* Assign candidates to a constituency/category
+* Activate/deactivate candidates
+
+Candidate data must be validated before publishing the election.
+
+---
+
+# Election-Specific Verification Setup
+
+Election creator must be able to configure which verification mechanisms are required for that election.
+
+Support configuration options such as:
+
+* Email OTP verification
+* Webcam verification
+* Face verification / biometric verification
+
+The verification configuration must be stored per election.
+
+Example:
+
+Election A:
+
+* Email OTP: Enabled
+* Face verification: Enabled
+
+Election B:
+
+* Email OTP: Enabled
+* Face verification: Disabled
+
+The voter-facing interface must dynamically follow the election's verification configuration.
+
+---
+
+# Election Schedule & Rules
+
+Allow election creator/admin to define:
+
+* Election start date/time
+* Election end date/time
+* Voting duration
+* Eligibility rules
+* Voting rules
+* Maximum vote count
+* One-person-one-vote rule
+* Election instructions
+* Candidate selection rules
+
+The backend must enforce these rules.
+
+Do not rely only on frontend validation.
+
+---
+
+# Election Configuration Lock
+
+CRITICAL:
+
+Once an election has started:
+
+* Candidate configuration cannot be modified
+* Voter eligibility cannot be modified
+* Election type cannot be changed
+* Election schedule cannot be modified
+* Verification configuration cannot be changed
+* Voting rules cannot be changed
+
+The backend must enforce this lock.
+
+Frontend buttons should also become disabled.
+
+If an admin attempts a forbidden modification, return a proper API error.
+
+---
+
+# Election Management Dashboard
+
+Create a professional dashboard for election creators/admins.
+
+Dashboard should display:
+
+* Total elections
+* Draft elections
+* Scheduled elections
+* Active elections
+* Completed elections
+* Total voters
+* Total candidates
+* Votes cast
+* Participation percentage
+
+Provide election cards/table with:
+
+* Election name
+* Type
+* Status
+* Start time
+* End time
+* Voter count
+* Candidate count
+* Votes cast
+* Actions
+
+Actions:
+
+* View
+* Edit
+* Configure
+* Start
+* Pause
+* Stop
+* Monitor
+* View logs
+* View results
+
+---
+
+# Election Start / Stop Control
+
+Admin must be able to:
+
+* Start scheduled election
+* Pause active election
+* Resume paused election
+* Stop election
+* Complete election
+
+Backend must verify valid state transitions.
+
+Example:
+
+DRAFT → SCHEDULED → ACTIVE → COMPLETED
+
+Invalid state transitions must be rejected.
+
+---
+
+# Election Monitoring
+
+Create a real-time or periodically refreshed monitoring dashboard showing:
+
+* Registered voters
+* Eligible voters
+* Verified voters
+* Votes cast
+* Remaining voters
+* Participation percentage
+* Voting activity
+* Current election status
+
+Do not expose confidential vote choices.
+
+Only show safe aggregate information.
+
+---
+
+# Audit Logs
+
+Create comprehensive election audit logging.
+
+Track events such as:
+
+* Election created
+* Election updated
+* Candidate added
+* Candidate removed
+* Voter added
+* Voter removed
+* Election started
+* Election paused
+* Election resumed
+* Election stopped
+* Configuration locked
+* Verification completed
+* Vote submitted
+* Result generated
+* Result published
+
+Each log should contain:
+
+* Timestamp
+* User/admin
+* Action
+* Election
+* Relevant metadata
+* IP/device information where appropriate
+
+Never log sensitive credentials, passwords, OTP values or private biometric data.
+
+---
+
+# 2. VOTER VERIFICATION MODULE
+
+## Purpose
+
+Before voting, the system must verify that:
+
+1. The user is authenticated.
+2. The user is eligible for the selected election.
+3. Required verification is completed.
+4. The voter has not already voted.
+5. The voter receives one-time voting authorization.
+
+---
+
+# Voter Eligibility Validation
+
+When a voter enters an election:
+
+Backend must verify:
+
+* User exists
+* User account is valid
+* Election exists
+* Election is currently active
+* User is eligible for the election
+* User has not already voted
+* Election rules allow voting
+
+If any validation fails, voting must not continue.
+
+---
+
+# Email OTP Verification
+
+If the election requires OTP:
+
+Create a voter verification flow.
+
+Flow:
+
+Authenticated User
+↓
+Select Election
+↓
+Eligibility Check
+↓
+Request OTP
+↓
+Send OTP
+↓
+Enter OTP
+↓
+Verify OTP
+↓
+Verification Success
+↓
+Continue
+
+OTP requirements:
+
+* Cryptographically secure 6-digit OTP
+* Expiry time
+* Maximum attempts
+* Resend cooldown
+* Rate limiting
+* OTP must never be stored as plaintext
+* OTP must never appear in logs
+* OTP must never be returned by API
+
+Reuse the existing OTP infrastructure where possible instead of creating a duplicate authentication OTP system.
+
+---
+
+# Webcam / Face Verification
+
+If enabled for the election:
+
+Create a voter-facing webcam verification page.
+
+Requirements:
+
+* Request camera permission
+* Show live webcam preview
+* Capture required frames
+* Detect face
+* Validate face quality
+* Compare with the registered voter identity
+* Return verification result
+* Handle camera denial
+* Handle no-face detection
+* Handle multiple-face detection
+* Handle poor-quality image
+* Handle verification failure
+
+Use:
+
+* OpenCV
+* Face Recognition / ArcFace as appropriate
+
+Do not create a separate biometric enrollment UI unless absolutely required by the existing backend design.
+
+Biometric configuration should remain election/backend controlled.
+
+---
+
+# One-Time Voting Authorization
+
+After successful eligibility + required verification:
+
+Generate a secure one-time voting authorization.
+
+Authorization must:
+
+* Be tied to user
+* Be tied to election
+* Expire
+* Be single-use
+* Cannot be reused
+* Cannot be transferred to another election
+* Cannot be used after election ends
+
+Example flow:
+
+AUTHENTICATED
+↓
+ELIGIBILITY VALIDATED
+↓
+OTP VERIFIED (if enabled)
+↓
+FACE VERIFIED (if enabled)
+↓
+VOTING AUTHORIZATION GENERATED
+↓
+VOTING PAGE UNLOCKED
+
+Do not allow frontend-only authorization.
+
+Backend must validate authorization before accepting a vote.
+
+---
+
+# Verification Status UI
+
+Create a clear voter verification progress interface:
+
+✓ Authentication
+✓ Election Eligibility
+✓ Email OTP
+✓ Face Verification
+✓ Voting Authorization
+
+Only display the verification steps enabled for that election.
+
+---
+
+# 3. VOTING MODULE
+
+## Purpose
+
+Provide a secure, simple and reliable voting experience.
+
+The voting module must enforce:
+
+* Secure voting authorization
+* Candidate selection
+* Vote confirmation
+* One-time vote submission
+* Confidential ballot storage
+
+---
+
+# Voter Election Dashboard
+
+Authenticated voter should see:
+
+* Available elections
+* Upcoming elections
+* Active elections
+* Completed elections
+* Elections already voted in
+
+For each election show:
+
+* Election name
+* Election type
+* Status
+* Start time
+* End time
+* Instructions
+* Voting eligibility status
+
+---
+
+# Candidate List
+
+For an active eligible election, display candidates.
+
+Candidate card should contain:
+
+* Candidate photo
+* Candidate name
+* Candidate details
+* Manifesto/description
+* Selection control
+
+UI should be clean and accessible.
+
+---
+
+# Candidate Selection
+
+Allow the voter to select candidate(s) according to election rules.
+
+Backend must validate:
+
+* Candidate belongs to election
+* Candidate is active
+* Candidate is eligible
+* Election is active
+* Vote authorization is valid
+* Voter has not already voted
+
+Do not trust candidate IDs sent from frontend without backend validation.
+
+---
+
+# Vote Confirmation
+
+Before submission, display a confirmation screen.
+
+Example:
+
+Election:
+ABC College Election
+
+Selected Candidate:
+Candidate Name
+
+Then show:
+
+"Your vote is ready to be submitted."
+
+Buttons:
+
+* Back / Change Selection
+* Confirm Vote
+
+Clearly warn that after confirmation, the vote cannot be changed.
+
+---
+
+# Secure Vote Submission
+
+When voter confirms:
+
+Frontend → Backend API
+
+Backend must atomically:
+
+1. Validate authenticated user
+2. Validate election
+3. Validate election status
+4. Validate voter eligibility
+5. Validate voting authorization
+6. Validate candidate
+7. Check voter has not already voted
+8. Store vote
+9. Mark voting authorization as consumed
+10. Mark voter as voted for that election
+11. Record audit event
+12. Return success
+
+Prevent duplicate submissions caused by:
+
+* Double clicking
+* Refresh
+* Multiple browser tabs
+* API replay
+* Concurrent requests
+
+Use database transactions and appropriate constraints/locking.
+
+---
+
+# One-Time Vote Submission
+
+CRITICAL SECURITY RULE:
+
+A voter can vote only once per election.
+
+Enforce this at database/backend level.
+
+Do NOT rely only on:
+
+if userAlreadyVoted:
+
+Frontend.
+
+Create a database constraint/model design that prevents duplicate votes.
+
+---
+
+# Confidential Ballot Storage
+
+The system must keep the ballot confidential.
+
+Do not expose a user's candidate choice through:
+
+* Admin dashboard
+* Voter dashboard
+* Audit logs
+* API responses
+* Browser local storage
+* URLs
+
+After submission, the voter should receive confirmation without exposing unnecessary sensitive ballot information.
+
+Design the database so voter identity and vote choice are separated as much as practical while still supporting one-vote enforcement and auditability.
+
+Never store passwords, OTPs or biometric raw data in vote records.
+
+---
+
+# Vote Confirmation Screen
+
+After successful vote submission:
+
+Display:
+
+✓ Vote Successfully Submitted
+
+Show:
+
+* Election name
+* Submission timestamp
+* Confirmation/reference ID
+
+Do NOT display unnecessary sensitive ballot information.
+
+Disable voting for that election.
+
+---
+
+# Voting Security
+
+Implement protection against:
+
+* Duplicate voting
+* Replay attacks
+* Expired authorization
+* Voting outside election time
+* Unauthorized candidate IDs
+* Tampered requests
+* Multiple simultaneous submissions
+* CSRF/session abuse as applicable
+* API manipulation
+
+Backend must always be authoritative.
+
+---
+
+# 4. RESULT & REPORT MODULE
+
+## Purpose
+
+Automatically count votes, generate election results, publish results and provide reports.
+
+---
+
+# Automatic Vote Counting
+
+After an election is completed:
+
+Backend calculates:
+
+* Total votes
+* Votes per candidate
+* Candidate percentages
+* Total eligible voters
+* Total voters who voted
+* Participation percentage
+* Non-participating voters count
+
+Do not manually enter result values.
+
+Results must be calculated from stored votes.
+
+---
+
+# Result Generation
+
+Create a result generation service/API.
+
+Result should contain:
+
+* Election
+* Candidate
+* Vote count
+* Vote percentage
+* Rank
+* Total votes
+* Total eligible voters
+* Participation percentage
+
+Sort candidates by vote count.
+
+Handle ties correctly.
+
+---
+
+# Result Publishing
+
+Results should NOT automatically become public before the configured election completion state unless the election creator explicitly allows it.
+
+Election creator/admin can:
+
+* Generate results
+* Review results
+* Publish results
+* Unpublish results if policy allows
+
+Once published, voters can view the permitted results.
+
+---
+
+# Voter Result View
+
+Create a clean results page showing:
+
+* Election name
+* Election status
+* Total votes
+* Participation rate
+* Candidate results
+* Vote percentages
+* Winner
+
+Use visual charts where useful.
+
+Do not expose private voter information.
+
+---
+
+# Winner Determination
+
+Automatically determine:
+
+* Winner
+* Runner-up
+* Rank of every candidate
+
+For ties:
+
+Do not silently select a winner.
+
+Display:
+
+"Tie detected"
+
+Allow the configured election rules to determine the next action.
+
+---
+
+# Election Reports
+
+Create reports for election creators/admins.
+
+Reports should include:
+
+## Election Summary
+
+* Election name
+* Election type
+* Date/time
+* Status
+* Total eligible voters
+* Total votes
+* Participation percentage
+
+## Candidate Report
+
+* Candidate name
+* Vote count
+* Percentage
+* Rank
+
+## Participation Report
+
+* Eligible voters
+* Verified voters
+* Voters who voted
+* Voters who did not vote
+* Participation percentage
+
+## Election Activity Report
+
+* Verification count
+* Vote submission count
+* Failed verification count
+* Relevant audit events
+
+Do not expose confidential ballot choices linked to voter identity.
+
+---
+
+# Dashboard Analytics
+
+Create visual analytics:
+
+* Total voters
+* Votes cast
+* Participation rate
+* Candidate vote distribution
+* Verification success rate
+* Election status
+
+Use suitable charts.
+
+Charts should update from backend data.
+
+---
+
+# REPORT EXPORT
+
+Where appropriate, support:
+
+* PDF report
+* CSV report
+
+Export only authorized data.
+
+Never export:
+
+* Passwords
+* OTP values
+* Session tokens
+* Raw biometric data
+* Confidential voter-to-candidate mappings
+
+---
+
+# FRONTEND PAGES TO BUILD
+
+Create the following pages/components.
+
+## Creator/Admin
+
+* Creator Dashboard
+* Election List
+* Create Election
+* Edit Election
+* Election Details
+* Election Configuration
+* Voter Management
+* Candidate Management
+* Verification Configuration
+* Election Rules
+* Election Schedule
+* Election Monitoring
+* Election Audit Logs
+* Election Control
+* Result Dashboard
+* Reports
+* Report Export
+
+## Voter
+
+* Voter Dashboard
+* Available Elections
+* Election Details
+* Eligibility Check
+* Verification Progress
+* OTP Verification
+* Webcam/Face Verification
+* Voting Authorization
+* Candidate List
+* Vote Selection
+* Vote Confirmation
+* Vote Success
+* Election Results
+
+---
+
+# BACKEND API STRUCTURE
+
+Design clean REST APIs.
+
+Suggested structure:
+
+/api/elections/
+/api/elections/{id}/
+/api/elections/{id}/voters/
+/api/elections/{id}/candidates/
+/api/elections/{id}/verification/
+/api/elections/{id}/rules/
+/api/elections/{id}/schedule/
+/api/elections/{id}/start/
+/api/elections/{id}/pause/
+/api/elections/{id}/resume/
+/api/elections/{id}/stop/
+/api/elections/{id}/monitor/
+/api/elections/{id}/audit-logs/
+
+/api/voter/elections/
+/api/voter/elections/{id}/eligibility/
+/api/voter/elections/{id}/verification/
+/api/voter/elections/{id}/otp/
+/api/voter/elections/{id}/face-verification/
+/api/voter/elections/{id}/authorization/
+
+/api/voting/{election_id}/candidates/
+/api/voting/{election_id}/submit/
+/api/voting/{election_id}/status/
+
+/api/results/{election_id}/
+/api/results/{election_id}/generate/
+/api/results/{election_id}/publish/
+
+/api/reports/{election_id}/
+/api/reports/{election_id}/participation/
+/api/reports/{election_id}/candidates/
+/api/reports/{election_id}/export/
+
+Adapt endpoint naming to the existing project architecture if equivalent APIs already exist.
+
+Do not create duplicate APIs.
+
+---
+
+# DATABASE DESIGN
+
+Extend the existing Django/PostgreSQL database.
+
+Suggested entities:
+
+Election
+
+* id
+* name
+* description
+* election_type
+* constituency
+* status
+* start_datetime
+* end_datetime
+* rules
+* verification_config
+* created_by
+* created_at
+* updated_at
+
+ElectionVoter
+
+* id
+* election
+* user
+* eligibility_status
+* verification_status
+* has_voted
+* verified_at
+* voted_at
+
+Candidate
+
+* id
+* election
+* name
+* photo
+* description
+* manifesto
+* status
+* created_at
+
+VotingAuthorization
+
+* id
+* election
+* voter
+* token/hash
+* expires_at
+* consumed
+* created_at
+
+Vote
+
+* id
+* election
+* candidate
+* ballot/reference information
+* submitted_at
+
+ElectionResult
+
+* id
+* election
+* candidate
+* vote_count
+* percentage
+* rank
+
+AuditLog
+
+* id
+* election
+* user
+* action
+* metadata
+* timestamp
+
+IMPORTANT:
+
+Adapt these models to the existing database instead of blindly creating duplicates.
+
+---
+
+# ROLE-BASED ACCESS CONTROL
+
+Support roles based on the existing authentication/user system.
+
+At minimum:
+
+## Voter
+
+Can:
+
+* View eligible elections
+* Complete verification
+* Vote
+* View permitted results
+
+Cannot:
+
+* Create elections
+* Modify candidates
+* Modify voters
+* Start/stop elections
+* View confidential administrative data
+
+## Election Creator/Admin
+
+Can:
+
+* Create elections
+* Configure elections
+* Manage voters
+* Manage candidates
+* Configure verification
+* Start/stop elections
+* Monitor elections
+* Generate results
+* Publish results
+* View reports
+* View audit logs
+
+Always enforce permissions in Django backend.
+
+---
+
+# SECURITY REQUIREMENTS
+
+Security is a core requirement.
+
+Implement:
+
+* Backend authorization
+* Role-based permissions
+* Input validation
+* Serializer validation
+* Database constraints
+* Transaction-safe vote submission
+* Rate limiting
+* Secure token handling
+* Secure OTP handling
+* Audit logging
+* API validation
+* Duplicate-vote protection
+* Election state validation
+* Expired authorization rejection
+* Proper error handling
+* No sensitive information in logs
+* No sensitive information in frontend storage
+
+Never trust frontend state.
+
+---
+
+# ERROR HANDLING
+
+Create meaningful error states.
+
+Examples:
+
+"Election is not currently active."
+
+"You are not eligible for this election."
+
+"You have already voted in this election."
+
+"Voting authorization has expired."
+
+"Verification failed."
+
+"Camera permission is required."
+
+"Candidate is no longer available."
+
+"Election configuration is locked."
+
+"Results are not yet published."
+
+Use proper HTTP status codes.
+
+---
+
+# UI / UX REQUIREMENTS
+
+The UI must look like a professional production-ready digital voting platform.
+
+Design principles:
+
+* Clean modern dashboard
+* Responsive design
+* Desktop + tablet + mobile support
+* Clear navigation
+* Consistent cards
+* Tables
+* Status badges
+* Confirmation dialogs
+* Loading states
+* Empty states
+* Error states
+* Success states
+* Toast notifications
+* Accessible forms
+* Clear election status indicators
+
+Do not create unnecessary pages.
+
+Do not create an AI chatbot.
+
+---
+
+# EXISTING PROJECT INTEGRATION
+
+Before implementing:
+
+1. Inspect the existing repository.
+2. Understand current React structure.
+3. Understand existing Django structure.
+4. Understand existing authentication implementation.
+5. Understand existing models.
+6. Understand existing API patterns.
+7. Understand existing database schema.
+8. Identify reusable components.
+9. Identify already implemented election-related functionality.
+10. Do not duplicate existing functionality.
+
+Then integrate the new modules into the existing architecture.
+
+---
+
+# VERY IMPORTANT – AUTHENTICATION PRESERVATION
+
+The existing Authentication Module is already implemented.
+
+Treat it as a protected subsystem.
+
+Do not modify authentication unless a small integration change is absolutely necessary.
+
+The new modules must consume the existing authenticated user.
+
+Expected high-level flow:
+
+AUTHENTICATION
+↓
+USER AUTHENTICATED
+↓
+ELECTION DASHBOARD
+↓
+SELECT ELECTION
+↓
+ELIGIBILITY VALIDATION
+↓
+ELECTION-SPECIFIC VERIFICATION
+↓
+VOTING AUTHORIZATION
+↓
+CANDIDATE SELECTION
+↓
+VOTE CONFIRMATION
+↓
+ONE-TIME VOTE SUBMISSION
+↓
+VOTE SUCCESS
+↓
+ELECTION COMPLETION
+↓
+AUTOMATIC COUNTING
+↓
+RESULT GENERATION
+↓
+RESULT PUBLISHING
+↓
+REPORTS
+
+---
+
+# TESTING REQUIREMENTS
+
+Create tests for critical backend logic.
+
+Test:
+
+* Election creation
+* Election state transitions
+* Election configuration locking
+* Voter eligibility
+* Candidate assignment
+* OTP verification integration
+* Face verification integration
+* Voting authorization
+* Expired authorization
+* Duplicate voting
+* Concurrent vote submission
+* Unauthorized API access
+* Result generation
+* Winner calculation
+* Tie handling
+* Result publishing
+* Report generation
+
+Especially test that a voter CANNOT submit two votes for the same election.
+
+---
+
+# IMPLEMENTATION ORDER
+
+Implement in this exact order:
+
+PHASE 1
+Inspect existing project and authentication architecture.
+
+PHASE 2
+Database models and migrations.
+
+PHASE 3
+Election Creation Module.
+
+PHASE 4
+Voter Eligibility + Verification Module.
+
+PHASE 5
+Voting Module.
+
+PHASE 6
+Result & Report Module.
+
+PHASE 7
+Admin/Creator Dashboard integration.
+
+PHASE 8
+Voter Dashboard integration.
+
+PHASE 9
+Security hardening.
+
+PHASE 10
+Testing and bug fixing.
+
+PHASE 11
+Final UI/UX polish.
+
+---
+
+# FINAL ACCEPTANCE CRITERIA
+
+The implementation is complete only when:
+
+✓ Existing authentication continues working.
+
+✓ Authenticated users can access the appropriate dashboard.
+
+✓ Election creators can create and configure elections.
+
+✓ Election creators can manage voters and candidates.
+
+✓ Election-specific verification can be configured.
+
+✓ Election schedules and rules are enforced.
+
+✓ Election configuration becomes locked after start.
+
+✓ Eligible voters can complete required verification.
+
+✓ OTP verification works when enabled.
+
+✓ Webcam/face verification works when enabled.
+
+✓ One-time voting authorization is generated.
+
+✓ Voters can view candidates.
+
+✓ Voters can select a candidate according to election rules.
+
+✓ Voters receive a confirmation screen before submission.
+
+✓ Vote submission is transaction-safe.
+
+✓ Duplicate voting is impossible.
+
+✓ Expired/invalid authorization is rejected.
+
+✓ Confidential ballot information is protected.
+
+✓ Election creators can monitor elections.
+
+✓ Audit logs are generated.
+
+✓ Votes are automatically counted after election completion.
+
+✓ Results are generated automatically.
+
+✓ Winners and rankings are calculated.
+
+✓ Tie cases are handled according to election rules.
+
+✓ Results can be published.
+
+✓ Voters can view published results.
+
+✓ Participation reports are available.
+
+✓ Candidate reports are available.
+
+✓ Election reports are available.
+
+✓ Authorized reports can be exported.
+
+✓ Role-based permissions are enforced.
+
+✓ No passwords, OTPs, tokens or raw biometric data are exposed.
+
+✓ No AI Chatbot is implemented.
+
+✓ No duplicate Authentication module is created.
+
+✓ Existing project architecture is preserved.
+
+---
+
+# DEVELOPMENT RULE
+
+Do not just generate mock UI.
+
+Build the modules as a functional full-stack implementation:
+
+React frontend
++
+Django REST APIs
++
+PostgreSQL database
++
+Real validation
++
+Real authorization
++
+Real vote transaction handling
++
+Real result calculation
++
+Real audit logging
+
+Avoid hardcoded fake data except for development seed/test data.
+
+After implementation, run the application, test the APIs, test the frontend flows, fix errors, and ensure all four modules work together end-to-end.
+
+The final result must be a cohesive DigiVote system where the already-existing Authentication Module seamlessly connects to the newly implemented Election Creation, Voter Verification, Voting, and Result & Report modules.
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-07T21:23:07+05:30.
+
+The user's current state is as follows:
+Active Document: d:\DigiVoting\Running process.txt (LANGUAGE_PLAINTEXT)
+Cursor is on line: 23
+Other open documents:
+- d:\DigiVoting\Running process.txt (LANGUAGE_PLAINTEXT)
+- d:\DigiVoting\docker-compose.yml (LANGUAGE_YAML)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.8 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

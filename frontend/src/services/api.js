@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,6 +8,15 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Request interceptor: attach bearer token if present in localStorage
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('digivote_access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // Configure global interceptors for clean error translations and data unpacking
