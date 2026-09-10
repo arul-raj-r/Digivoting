@@ -5,7 +5,6 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 
 // Layouts & Guards
-import PublicLayout from './layouts/PublicLayout';
 import AppShell from './layouts/AppShell';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import RoleRoute from './routes/RoleRoute';
@@ -69,14 +68,14 @@ export default function App() {
           <Router>
             <Routes>
               {/* =========================================================
-                  1. PUBLIC WEBSITE ROUTES (PublicLayout)
+                  1. PUBLIC WEBSITE ROUTES
                   ========================================================= */}
-              <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
-              <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
-              <Route path="/features" element={<PublicLayout><Features /></PublicLayout>} />
-              <Route path="/how-it-works" element={<PublicLayout><HowItWorks /></PublicLayout>} />
-              <Route path="/security" element={<PublicLayout><Security /></PublicLayout>} />
-              <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
+              <Route path="/" element={<Home />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/features" element={<Features />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/security" element={<Security />} />
+              <Route path="/contact" element={<Contact />} />
 
               {/* =========================================================
                   2. AUTHENTICATION FLOW ROUTES
