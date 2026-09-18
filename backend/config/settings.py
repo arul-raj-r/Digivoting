@@ -30,7 +30,13 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = [h.strip() for h in env('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',') if h.strip()]
+# Allowed hosts configuration
+_default_hosts = 'localhost,127.0.0.1,testserver,digivoting-backend.onrender.com,.onrender.com'
+ALLOWED_HOSTS = [h.strip() for h in env('ALLOWED_HOSTS', default=_default_hosts).split(',') if h.strip()]
+for _h in ['digivoting-backend.onrender.com', '.onrender.com', 'localhost', '127.0.0.1', 'testserver']:
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -59,6 +65,7 @@ INSTALLED_APPS = [
     'security.apps.SecurityConfig',
     'audit.apps.AuditConfig',
     'notifications.apps.NotificationsConfig',
+    'ai_assistant.apps.AiAssistantConfig',
 ]
 
 MIDDLEWARE = [
@@ -187,9 +194,21 @@ else:
     }
 
 # CORS & CSRF Configuration
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [o.strip() for o in env('CORS_ALLOWED_ORIGINS', default='http://localhost:5173').split(',') if o.strip()]
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in env('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173').split(',') if o.strip()]
+CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
+_default_cors = 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,https://digivoting.onrender.com'
+CORS_ALLOWED_ORIGINS = [o.strip() for o in env('CORS_ALLOWED_ORIGINS', default=_default_cors).split(',') if o.strip()]
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in env('CSRF_TRUSTED_ORIGINS', default=_default_cors).split(',') if o.strip()]
+
+for _origin in ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'https://digivoting.onrender.com']:
+    if _origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origin)
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https:\/\/.*\.onrender\.com$",
+    r"^https:\/\/.*\.vercel\.app$",
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # Security settings
@@ -287,4 +306,59 @@ OTP_RESEND_COOLDOWN_SECONDS = env.int('OTP_RESEND_COOLDOWN_SECONDS', default=30)
 OTP_MAX_ATTEMPTS = env.int('OTP_MAX_ATTEMPTS', default=3)
 EMAIL_VERIFICATION_EXPIRY_HOURS = env.int('EMAIL_VERIFICATION_EXPIRY_HOURS', default=24)
 PASSWORD_RESET_EXPIRY_MINUTES = env.int('PASSWORD_RESET_EXPIRY_MINUTES', default=60)
+
+# AI Assistant & RAG Configuration
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+PINECONE_API_KEY = env('PINECONE_API_KEY', default='')
+PINECONE_INDEX_NAME = env('PINECONE_INDEX_NAME', default='')
+PINECONE_NAMESPACE = env('PINECONE_NAMESPACE', default='digivote-docs')
+PINECONE_CLOUD = env('PINECONE_CLOUD', default='aws')
+PINECONE_REGION = env('PINECONE_REGION', default='us-east-1')
+GEMINI_EMBEDDING_MODEL = env('GEMINI_EMBEDDING_MODEL', default='gemini-embedding-001')
+GEMINI_CHAT_MODEL = env('GEMINI_CHAT_MODEL', default='gemini-2.5-flash')
+GEMINI_EMBEDDING_DIMENSION = env.int('GEMINI_EMBEDDING_DIMENSION', default=3072)
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': env('DJANGO_LOG_LEVEL', default='INFO'),
+            'propagate': True,
+        },
+        'ai_assistant': {
+            'handlers': ['console'],
+            'level': env('AI_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+        'accounts': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'authentication': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
 

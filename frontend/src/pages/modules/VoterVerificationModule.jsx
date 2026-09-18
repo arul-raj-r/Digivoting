@@ -18,7 +18,6 @@ import {
   Clock, 
   ArrowRight, 
   RefreshCw, 
-  Sparkles,
   Vote,
   Key,
   Shield,
@@ -501,12 +500,11 @@ export default function VoterVerificationModule() {
                         {/* Visual Biometric Guide Overlay */}
                         {cameraActive && (
                           <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
-                            {/* Scanning oval / 3D Target */}
-                            <div className="w-48 h-64 border-2 border-dashed border-indigo-400/80 rounded-[50%] relative flex items-center justify-center animate-scanner-pulse">
-                              <div className="absolute inset-0 border border-indigo-500/40 rounded-[50%] animate-ping" />
-                              <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent absolute animate-scan-line" />
+                            {/* Scanning oval / Target */}
+                            <div className="w-48 h-64 border-2 border-dashed border-indigo-400/80 rounded-[50%] relative flex items-center justify-center">
+                              <div className="w-full h-0.5 bg-indigo-500/80 absolute" />
                             </div>
-                            <span className="mt-3 text-[11px] font-mono text-cyan-300 font-bold px-2.5 py-1 rounded-full bg-slate-900/80 border border-cyan-500/30">
+                            <span className="mt-3 text-[11px] font-mono text-indigo-300 font-bold px-2.5 py-1 rounded-full bg-slate-900/90 border border-indigo-500/30">
                               POSITION FACE INSIDE GUIDE
                             </span>
                           </div>
@@ -547,7 +545,7 @@ export default function VoterVerificationModule() {
                           <button
                             type="button"
                             onClick={startCamera}
-                            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md transition-all flex items-center gap-2"
+                            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"
                           >
                             <Camera className="w-4 h-4" />
                             <span>Activate Webcam</span>
@@ -558,10 +556,10 @@ export default function VoterVerificationModule() {
                               type="button"
                               onClick={handleCaptureAndVerify}
                               disabled={capturing || faceVerifying}
-                              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-md shadow-cyan-600/20 transition-all flex items-center gap-2"
+                              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2"
                             >
-                              <Sparkles className="w-4 h-4" />
-                              <span>{faceVerifying ? 'Analyzing Face with DNN...' : 'Capture & Verify Identity'}</span>
+                              <ShieldCheck className="w-4 h-4" />
+                              <span>{faceVerifying ? 'Verifying Facial Match...' : 'Capture & Verify Identity'}</span>
                             </button>
                             <button
                               type="button"

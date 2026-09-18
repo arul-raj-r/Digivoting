@@ -13,6 +13,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from authentication.models import User
 from elections.models import Election, Candidate, EligibleVoter
 from elections.audit import log_election_action
+from elections.permissions import synchronize_election_lifecycle
 from voting.models import Ballot, ElectionResult, CandidateResult, BallotConfirmationToken, VotingAuthorization
 from voting.crypto import encrypt_ballot_choice
 from voting.tally import compute_election_tally
@@ -38,6 +39,7 @@ def check_election_and_voter_eligibility(election_id, request_user):
     except (Election.DoesNotExist, ValueError):
         return None, None, Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    synchronize_election_lifecycle(election)
     if election.status != 'active':
         return None, None, Response(
             {"error": f"Voting is not open for this election. Status is currently '{election.status}'."},
@@ -338,7 +340,7 @@ class ElectionResultsGenerateView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Only the election creator can generate results."}, status=status.HTTP_403_FORBIDDEN)
 
         tally_result = compute_election_tally(election, force=True)
@@ -370,7 +372,7 @@ class ElectionResultsUnpublishView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Only the election creator can unpublish results."}, status=status.HTTP_403_FORBIDDEN)
 
         result = getattr(election, 'election_result', None)
@@ -406,7 +408,7 @@ class ElectionResultsPublishView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Only the election creator can publish results."}, status=status.HTTP_403_FORBIDDEN)
 
         if election.status != 'completed':
@@ -467,7 +469,7 @@ class ElectionResultsView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        is_owner = (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN)
+        is_owner = election.created_by == user
 
         # Check if tally has been computed
         result = getattr(election, 'election_result', None)
@@ -521,7 +523,7 @@ class ElectionReportsParticipationView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         total_eligible = election.eligible_voters.count()
@@ -554,7 +556,7 @@ class ElectionReportsCandidatesView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         candidates = election.candidates.all().order_by('display_order', 'added_at')
@@ -594,7 +596,7 @@ class ElectionReportsExportView(APIView):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
+        if election.created_by != user:
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         result = getattr(election, 'election_result', None)

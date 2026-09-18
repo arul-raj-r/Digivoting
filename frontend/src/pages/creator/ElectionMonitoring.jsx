@@ -197,7 +197,7 @@ export default function ElectionMonitoring() {
         <div className="space-y-1.5">
           <div className="w-full h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-sky-600 to-indigo-500 transition-all duration-700"
+              className="h-full rounded-full bg-blue-600 transition-all duration-700"
               style={{ width: `${Math.max(turnoutPercent, totalEligible > 0 ? 1 : 0)}%` }}
             />
           </div>

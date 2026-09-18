@@ -15,7 +15,8 @@ import {
   Sun,
   Moon,
   ChevronRight,
-  PlusCircle
+  PlusCircle,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -35,24 +36,16 @@ export default function DashboardLayout({ children }) {
     navigate('/');
   };
 
-  const isCreatorOrAdmin = user?.role === 'ELECTION_CREATOR' || user?.role === 'ADMIN' || user?.is_staff || user?.is_superuser;
-
-  // Role-based navigation swapping between Creator Dashboard mode and Voter Portal mode
-  const navItems = isCreatorOrAdmin
-    ? [
-        { name: 'Elections Hub', path: '/elections', icon: Landmark },
-        { name: 'Create Election', path: '/elections/create', icon: PlusCircle },
-        { name: 'Voter Portal', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Active Sessions', path: '/sessions', icon: Shield },
-        { name: 'Voter Profile', path: '/profile', icon: User },
-        { name: 'Help & Support', path: '/help', icon: HelpCircle },
-      ]
-    : [
-        { name: 'Voter Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Active Sessions', path: '/sessions', icon: Shield },
-        { name: 'Voter Profile', path: '/profile', icon: User },
-        { name: 'Help & Support', path: '/help', icon: HelpCircle },
-      ];
+  // A unified DigiVote account can organize one election and vote in another.
+  const navItems = [
+    { name: 'Voter Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'My Elections', path: '/elections', icon: Landmark },
+    { name: 'Create Election', path: '/elections/create', icon: PlusCircle },
+    { name: 'AI Assistant', path: '/ai-assistant', icon: HelpCircle },
+    { name: 'Active Sessions', path: '/sessions', icon: Shield },
+    { name: 'Voter Profile', path: '/profile', icon: User },
+    { name: 'Help & Support', path: '/help', icon: HelpCircle },
+  ];
 
   // Helper to construct breadcrumbs based on route
   const getBreadcrumbs = () => {

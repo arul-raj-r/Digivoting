@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Menu, X, Sun, Moon, Laptop, Shield, ArrowRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import DigiVoteHelpWidget from '../components/ai/DigiVoteHelpWidget';
 
 export default function PublicLayout({ children }) {
   const { themeMode, cycleTheme, resolvedTheme } = useTheme();
@@ -11,37 +12,38 @@ export default function PublicLayout({ children }) {
 
   const links = [
     { name: 'Home', path: '/' },
-    { name: 'About Us', path: '/about' },
+    { name: 'About', path: '/about' },
     { name: 'Features', path: '/features' },
     { name: 'How It Works', path: '/how-it-works' },
     { name: 'Security', path: '/security' },
-    { name: 'Contact Us', path: '/contact' },
+    { name: 'Contact', path: '/contact' },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070b14] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-[#f7f5f0] dark:bg-[#101216] text-[#101216] dark:text-[#f7f5f0] transition-colors duration-200 font-sans">
+      
       {/* Top Public Navbar */}
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#070b14]/85 border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#171a20]/90 border-b border-stone-200/80 dark:border-[#262a33] backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             
-            {/* Logo */}
+            {/* Brand */}
             <div className="flex items-center">
-              <Link to="/" className="flex items-center gap-3 select-none group">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/25 group-hover:scale-105 transition-transform">
-                  <Shield className="h-5 w-5 text-white" />
+              <Link to="/" className="flex items-center gap-2.5 select-none group">
+                <div className="w-9 h-9 rounded-lg bg-[#1a4231] text-emerald-300 flex items-center justify-center border border-emerald-500/20 shadow-xs">
+                  <Shield className="h-5 w-5" />
                 </div>
                 <div className="flex flex-col leading-none">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
+                    <span className="font-serif font-bold text-lg tracking-tight text-stone-900 dark:text-white">
                       DigiVote
                     </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-bold">
-                      SECURE
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 dark:bg-[#101216] text-stone-600 dark:text-stone-400 border border-stone-200 dark:border-[#262a33] uppercase">
+                      Civic
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                    Secure Digital Voting Platform
+                  <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">
+                    Digital Voting Infrastructure
                   </span>
                 </div>
               </Link>
@@ -57,8 +59,8 @@ export default function PublicLayout({ children }) {
                   className={({ isActive }) =>
                     `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       isActive
-                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                        ? 'text-emerald-800 dark:text-emerald-300 bg-stone-100 dark:bg-[#101216]'
+                        : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-50 dark:hover:bg-[#101216]'
                     }`
                   }
                 >
@@ -69,39 +71,38 @@ export default function PublicLayout({ children }) {
 
             {/* Right Tools: Theme Toggle + Login + Get Started */}
             <div className="hidden md:flex items-center gap-3">
-              {/* 3-Mode Theme Button */}
               <button
                 type="button"
                 onClick={cycleTheme}
-                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs font-medium"
-                title={`Theme: ${themeMode.toUpperCase()} (Click to cycle Light / Dark / System)`}
-                aria-label="Toggle Theme"
+                className="p-2 rounded-lg text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#101216] transition-colors flex items-center gap-1.5 text-xs font-mono"
+                title={`Theme: ${themeMode.toUpperCase()}`}
+                aria-label="Toggle theme"
               >
                 {themeMode === 'system' ? (
-                  <Laptop className="h-4 w-4 text-indigo-500" />
+                  <Laptop className="h-4 w-4 text-stone-500" />
                 ) : resolvedTheme === 'dark' ? (
-                  <Moon className="h-4 w-4 text-indigo-400" />
+                  <Moon className="h-4 w-4 text-emerald-400" />
                 ) : (
-                  <Sun className="h-4 w-4 text-amber-500" />
+                  <Sun className="h-4 w-4 text-amber-600" />
                 )}
-                <span className="text-[11px] uppercase font-mono tracking-wider text-slate-400">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-stone-400">
                   {themeMode}
                 </span>
               </button>
 
-              <div className="h-5 w-px bg-slate-200 dark:border-slate-800" />
+              <div className="h-4 w-px bg-stone-200 dark:bg-[#262a33]" />
 
               <Link
                 to="/login"
-                className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 px-3.5 py-2 rounded-xl transition-colors"
+                className="text-xs font-semibold text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition-colors"
               >
-                Login
+                Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/25 transition-all hover:shadow-indigo-600/35"
+                className="inline-flex items-center gap-1.5 bg-[#101216] hover:bg-[#171a20] dark:bg-[#1a4231] dark:hover:bg-[#1f4f3b] text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors"
               >
-                <span>Get Started</span>
+                <span>Create account</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -111,23 +112,23 @@ export default function PublicLayout({ children }) {
               <button
                 type="button"
                 onClick={cycleTheme}
-                className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                className="p-2 rounded-lg text-stone-600 dark:text-stone-400"
                 aria-label="Toggle theme"
               >
                 {themeMode === 'system' ? (
-                  <Laptop className="h-4 w-4 text-indigo-500" />
+                  <Laptop className="h-4 w-4 text-stone-500" />
                 ) : resolvedTheme === 'dark' ? (
-                  <Moon className="h-4 w-4 text-indigo-400" />
+                  <Moon className="h-4 w-4 text-emerald-400" />
                 ) : (
-                  <Sun className="h-4 w-4 text-amber-500" />
+                  <Sun className="h-4 w-4 text-amber-600" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={toggleMenu}
-                className="inline-flex items-center justify-center p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-2 rounded-lg text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#101216]"
                 aria-expanded={isOpen}
-                aria-label="Toggle main menu"
+                aria-label="Toggle navigation"
               >
                 {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
@@ -135,9 +136,9 @@ export default function PublicLayout({ children }) {
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
+        {/* Mobile Drawer */}
         {isOpen && (
-          <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1527] px-4 pt-3 pb-6 space-y-2">
+          <div className="md:hidden border-b border-stone-200 dark:border-[#262a33] bg-white dark:bg-[#171a20] px-4 pt-3 pb-6 space-y-2">
             {links.map((link) => (
               <NavLink
                 key={link.name}
@@ -145,30 +146,30 @@ export default function PublicLayout({ children }) {
                 end={link.path === '/'}
                 onClick={() => setIsOpen(false)}
                 className={({ isActive }) =>
-                  `block px-3 py-2 rounded-lg text-sm font-semibold ${
+                  `block px-3 py-2 rounded-lg text-xs font-semibold ${
                     isActive
-                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'text-emerald-800 dark:text-emerald-300 bg-stone-100 dark:bg-[#101216]'
+                      : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#101216]'
                   }`
                 }
               >
                 {link.name}
               </NavLink>
             ))}
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+            <div className="pt-4 border-t border-stone-200 dark:border-[#262a33] flex flex-col gap-2">
               <Link
                 to="/login"
                 onClick={() => setIsOpen(false)}
-                className="w-full text-center py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                className="w-full text-center py-2 rounded-lg border border-stone-300 dark:border-[#262a33] text-xs font-semibold text-stone-800 dark:text-stone-200"
               >
-                Login
+                Sign in
               </Link>
               <Link
                 to="/register"
                 onClick={() => setIsOpen(false)}
-                className="w-full text-center bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-600/25"
+                className="w-full text-center bg-[#1a4231] text-white py-2 rounded-lg text-xs font-semibold"
               >
-                Get Started
+                Create account
               </Link>
             </div>
           </div>
@@ -180,62 +181,64 @@ export default function PublicLayout({ children }) {
         {children}
       </main>
 
-      {/* Professional Footer */}
-      <footer className="bg-slate-900 dark:bg-[#050811] text-slate-400 py-12 border-t border-slate-800">
+      {/* Institutional Footer */}
+      <footer className="bg-[#101216] text-stone-400 py-12 border-t border-[#262a33]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-white font-bold text-base">
-                <Shield className="h-5 w-5 text-indigo-400" />
+              <div className="flex items-center gap-2 text-white font-serif font-bold text-base">
+                <Shield className="h-5 w-5 text-emerald-400" />
                 <span>DigiVote</span>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Secure Digital Voting Platform built for modern organizations to conduct verified, confidential, and auditable digital elections.
+              <p className="text-xs text-stone-400 leading-relaxed">
+                Institutional digital voting infrastructure built to conduct verified, confidential, and auditable elections.
               </p>
-              <div className="text-[11px] text-slate-500 font-mono">
+              <div className="text-[11px] text-stone-500 font-mono">
                 Institutional Digital Voting Platform
               </div>
             </div>
             
             <div>
-              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Navigation</h3>
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3 font-mono">Navigation</h3>
               <ul className="space-y-2 text-xs">
                 <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
-                <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
+                <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
                 <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
                 <li><Link to="/how-it-works" className="hover:text-white transition-colors">How It Works</Link></li>
               </ul>
             </div>
 
             <div>
-              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Platform</h3>
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3 font-mono">Platform</h3>
               <ul className="space-y-2 text-xs">
                 <li><Link to="/security" className="hover:text-white transition-colors">Security Architecture</Link></li>
-                <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
-                <li><Link to="/login" className="hover:text-white transition-colors">Voter & Organizer Login</Link></li>
-                <li><Link to="/register" className="hover:text-white transition-colors">Get Started</Link></li>
+                <li><Link to="/contact" className="hover:text-white transition-colors">Contact</Link></li>
+                <li><Link to="/login" className="hover:text-white transition-colors">Voter & Admin Login</Link></li>
+                <li><Link to="/register" className="hover:text-white transition-colors">Register Account</Link></li>
               </ul>
             </div>
 
             <div>
-              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3">Security Principles</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                DigiVote integrates Email OTP MFA, webcam face verification, confidential ballot handling with time-truncated submission records, and end-to-end audit logging.
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider mb-3 font-mono">Governance</h3>
+              <p className="text-xs text-stone-400 leading-relaxed">
+                DigiVote implements two-factor authentication, authorized voter roster enforcement, confidential ballot segregation, and tamper-evident audit logging.
               </p>
             </div>
           </div>
 
-          <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-            <p>&copy; {new Date().getFullYear()} DigiVote. Secure Digital Voting Platform. All rights reserved.</p>
+          <div className="border-t border-[#262a33] pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
+            <p>&copy; {new Date().getFullYear()} DigiVote Platform &middot; Institutional Electoral Trust</p>
             <div className="flex gap-6">
-              <span className="text-slate-500">Privacy Policy</span>
-              <span className="text-slate-500">Terms of Service</span>
-              <span className="text-slate-500">Security Architecture</span>
+              <span className="text-stone-500">Privacy Standards</span>
+              <span className="text-stone-500">Terms of Governance</span>
+              <span className="text-stone-500">Ballot Confidentiality</span>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Floating DigiVote Help Drawer Widget */}
+      <DigiVoteHelpWidget />
     </div>
   );
 }
-

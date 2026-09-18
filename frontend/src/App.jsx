@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -10,42 +10,61 @@ import { ProtectedRoute } from './routes/ProtectedRoute';
 import RoleRoute from './routes/RoleRoute';
 import ElectionCreatorRoute from './components/auth/ElectionCreatorRoute';
 
-// Public Pages
-import Home from './pages/public/Home';
-import About from './pages/public/About';
-import Features from './pages/public/Features';
-import HowItWorks from './pages/public/HowItWorks';
-import Security from './pages/public/Security';
-import Contact from './pages/public/Contact';
+// Public Pages (Lazy Loaded)
+const Home = lazy(() => import('./pages/public/Home'));
+const About = lazy(() => import('./pages/public/About'));
+const Features = lazy(() => import('./pages/public/Features'));
+const HowItWorks = lazy(() => import('./pages/public/HowItWorks'));
+const Security = lazy(() => import('./pages/public/Security'));
+const Contact = lazy(() => import('./pages/public/Contact'));
 
-// Auth Pages
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyOTP from './pages/VerifyOTP';
-import VerifyEmail from './pages/VerifyEmail';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
+// Auth Pages (Lazy Loaded)
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const VerifyOTP = lazy(() => import('./pages/VerifyOTP'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const ElectionEntryPage = lazy(() => import('./pages/elections/ElectionEntryPage'));
 
-import VoterDashboard from './pages/voter/VoterDashboard';
-import AvailableElections from './pages/voter/AvailableElections';
-import MyElections from './pages/creator/MyElections';
-import CreateElectionWizard from './pages/creator/CreateElectionWizard';
-import ElectionControlCenter from './pages/creator/ElectionControlCenter';
-import VoterParticipationFlow from './pages/voter/VoterParticipationFlow';
+// Voter & Creator Core Workspace (Lazy Loaded)
+const VoterDashboard = lazy(() => import('./pages/voter/VoterDashboard'));
+const AvailableElections = lazy(() => import('./pages/voter/AvailableElections'));
+const MyElections = lazy(() => import('./pages/creator/MyElections'));
+const CreateElectionWizard = lazy(() => import('./pages/creator/CreateElectionWizard'));
+const ElectionControlCenter = lazy(() => import('./pages/creator/ElectionControlCenter'));
+const VoterParticipationFlow = lazy(() => import('./pages/voter/VoterParticipationFlow'));
+const VotingBooth = lazy(() => import('./pages/voter/VotingBooth'));
+const VotingHistory = lazy(() => import('./pages/voter/VotingHistory'));
 
-import VoterVerificationModule from './pages/modules/VoterVerificationModule';
-import ResultsReportModule from './pages/modules/ResultsReportModule';
-import SessionsSecurityPage from './pages/security/SessionsSecurityPage';
-import AuditLogsPage from './pages/security/AuditLogsPage';
-import Settings from './pages/Settings';
-import VoterProfile from './pages/voter/VoterProfile';
-import HelpSupport from './pages/voter/HelpSupport';
-import SecurityDashboard from './pages/admin/SecurityDashboard';
+// Specialized & Heavy Feature Modules (Lazy Loaded)
+const VoterVerificationModule = lazy(() => import('./pages/modules/VoterVerificationModule'));
+const ResultsReportModule = lazy(() => import('./pages/modules/ResultsReportModule'));
+const SessionsSecurityPage = lazy(() => import('./pages/security/SessionsSecurityPage'));
+const AuditLogsPage = lazy(() => import('./pages/security/AuditLogsPage'));
+const Settings = lazy(() => import('./pages/Settings'));
+const VoterProfile = lazy(() => import('./pages/voter/VoterProfile'));
+const HelpSupport = lazy(() => import('./pages/voter/HelpSupport'));
+const SecurityDashboard = lazy(() => import('./pages/admin/SecurityDashboard'));
 
-// Results Subpages
-import ElectionResultsVoter from './pages/voter/ElectionResultsVoter';
+// Results Subpages & AI Assistant (Lazy Loaded)
+const ElectionResultsVoter = lazy(() => import('./pages/voter/ElectionResultsVoter'));
+const AIAssistant = lazy(() => import('./pages/AIAssistant'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 import { setupHttpInterceptors } from './utils/httpInterceptor';
+
+// Institutional loading fallback skeleton
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-[50vh] flex flex-col items-center justify-center p-8 select-none">
+      <div className="relative flex items-center justify-center">
+        <div className="w-9 h-9 border-2 border-stone-200 dark:border-stone-800 border-t-forest-600 dark:border-t-forest-400 rounded-full animate-spin" />
+      </div>
+      <span className="mt-3 text-xs font-mono text-stone-500 dark:text-stone-400">Loading module...</span>
+    </div>
+  );
+}
 
 // Helper Redirect Components
 function VoteRedirect() {
@@ -66,7 +85,8 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <Router>
-            <Routes>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes>
               {/* =========================================================
                   1. PUBLIC WEBSITE ROUTES
                   ========================================================= */}
@@ -89,6 +109,10 @@ export default function App() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/password-reset/confirm" element={<ResetPassword />} />
 
+              {/* Public / Hybrid Election Entry (Direct Link & QR Code Destination) */}
+              <Route path="/election/:id" element={<ElectionEntryPage />} />
+              <Route path="/elections/:id/enter" element={<ElectionEntryPage />} />
+
               {/* =========================================================
                   3. AUTHENTICATED WORKSPACE: OVERVIEW & GENERAL MODULES
                   ========================================================= */}
@@ -97,6 +121,15 @@ export default function App() {
                 <ProtectedRoute>
                   <AppShell>
                     <VoterDashboard />
+                  </AppShell>
+                </ProtectedRoute>
+              } />
+
+              {/* DigiVote Civic AI Assistant */}
+              <Route path="/ai-assistant" element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <AIAssistant />
                   </AppShell>
                 </ProtectedRoute>
               } />
@@ -119,7 +152,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
-              {/* Voting Booth & Eligibility Verification Flow */}
+              {/* Voting Flow: Eligibility & Identity Verification */}
               <Route path="/voting" element={
                 <ProtectedRoute>
                   <AppShell>
@@ -127,7 +160,7 @@ export default function App() {
                   </AppShell>
                 </ProtectedRoute>
               } />
-              <Route path="/elections/:id/vote" element={
+              <Route path="/elections/:id/verify" element={
                 <ProtectedRoute>
                   <AppShell>
                     <VoterParticipationFlow />
@@ -141,7 +174,23 @@ export default function App() {
                   </AppShell>
                 </ProtectedRoute>
               } />
+
+              {/* Polling Booth: Candidate Selection & Ballot Submission */}
+              <Route path="/elections/:id/vote" element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <VotingBooth />
+                  </AppShell>
+                </ProtectedRoute>
+              } />
               <Route path="/vote/:id" element={<VoteRedirect />} />
+              <Route path="/voting-history" element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <VotingHistory />
+                  </AppShell>
+                </ProtectedRoute>
+              } />
 
               {/* Results & Reports */}
               <Route path="/results" element={
@@ -248,12 +297,22 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
+              {/* Access Restricted 403 */}
+              <Route path="/403" element={
+                <NotFound 
+                  code="403" 
+                  title="Access Restricted" 
+                  message="You do not have administrative clearance to access this area. Your session and credentials remain secure." 
+                />
+              } />
+
               {/* =========================================================
-                  5. CATCH-ALL FALLBACK
+                  5. CATCH-ALL 404 FALLBACK
                   ========================================================= */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
-          </Router>
+          </Suspense>
+        </Router>
         </AuthProvider>
       </ToastProvider>
     </ThemeProvider>

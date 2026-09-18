@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 from elections.models import (
@@ -94,13 +95,29 @@ class ElectionUpdateSerializer(serializers.ModelSerializer):
                         "end_datetime": "Election end datetime must be strictly after the start datetime."
                     })
             if 'start_datetime' in attrs and attrs['start_datetime']:
-                if attrs['start_datetime'] <= timezone.now():
+                # Allow a 60-second grace window to absorb latency and minor clock skew between client and server
+                if attrs['start_datetime'] <= timezone.now() - timedelta(seconds=60):
                     raise serializers.ValidationError({
                         "start_datetime": "Election start datetime must be scheduled in the future."
                     })
 
         if self.instance:
             current_status = self.instance.status
+
+            # Publishing has a deliberately narrow transition path. Active,
+            # paused, completed, and cancelled states are controlled by their
+            # dedicated lifecycle endpoints or schedule transitions, never by
+            # an arbitrary PATCH payload.
+            if new_status and new_status != current_status:
+                allowed_transitions = {
+                    'draft': {'configured'},
+                    'configured': {'scheduled'},
+                    'scheduled': set(),
+                }
+                if new_status not in allowed_transitions.get(current_status, set()):
+                    raise serializers.ValidationError({
+                        'status': f"Invalid lifecycle transition from '{current_status}' to '{new_status}'."
+                    })
 
             # Gate 1: 'draft' -> 'configured'
             if new_status == 'configured' and current_status == 'draft':
@@ -133,7 +150,7 @@ class ElectionUpdateSerializer(serializers.ModelSerializer):
                         "status": "Set a valid start and end date in the future before scheduling this election."
                     })
 
-                if start_datetime <= timezone.now():
+                if start_datetime <= timezone.now() - timedelta(seconds=60):
                     raise serializers.ValidationError({
                         "start_datetime": "Cannot schedule election: start datetime must be in the future."
                     })

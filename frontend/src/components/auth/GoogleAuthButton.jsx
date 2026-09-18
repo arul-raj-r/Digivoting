@@ -12,6 +12,9 @@ export default function GoogleAuthButton({ disabled = false, text = "Sign in wit
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '988463628659-tg8pt7db550gmtg8avat0hm94lk0kaml.apps.googleusercontent.com';
 
+  const initializedRef = useRef(false);
+  const handleCredentialResponseRef = useRef();
+
   const handleCredentialResponse = async (response) => {
     if (!response || !response.credential) {
       setErrorMsg('No credential returned from Google.');
@@ -45,11 +48,27 @@ export default function GoogleAuthButton({ disabled = false, text = "Sign in wit
     }
   };
 
+  handleCredentialResponseRef.current = handleCredentialResponse;
+
   useEffect(() => {
-    // Load Google Identity Services script dynamically if not present
+    // Check if Google Identity Services script is already present or loaded
     if (window.google?.accounts?.id) {
       setGisLoaded(true);
       return;
+    }
+
+    if (document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
+      const interval = setInterval(() => {
+        if (window.google?.accounts?.id) {
+          clearInterval(interval);
+          setGisLoaded(true);
+        }
+      }, 100);
+      const timeout = setTimeout(() => clearInterval(interval), 10000);
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
     }
 
     const script = document.createElement('script');
@@ -59,21 +78,20 @@ export default function GoogleAuthButton({ disabled = false, text = "Sign in wit
     script.onload = () => setGisLoaded(true);
     script.onerror = () => setErrorMsg('Failed to load Google Sign-In SDK.');
     document.body.appendChild(script);
-
-    return () => {
-      // cleanup script if unmounted before load
-    };
   }, []);
 
   useEffect(() => {
     if (gisLoaded && window.google?.accounts?.id && buttonRef.current) {
       try {
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleCredentialResponse,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
+        if (!initializedRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: (res) => handleCredentialResponseRef.current?.(res),
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+          initializedRef.current = true;
+        }
 
         window.google.accounts.id.renderButton(buttonRef.current, {
           theme: 'outline',

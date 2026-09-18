@@ -113,7 +113,7 @@ class ElectionResultSerializer(serializers.ModelSerializer):
 
     def get_results(self, obj):
         request = self.context.get('request')
-        candidate_results = obj.candidate_results.all().order_by('-vote_count', 'candidate__display_order')
+        candidate_results = obj.candidate_results.select_related('candidate', 'election_result').all().order_by('-vote_count', 'candidate__display_order')
         return CandidateResultSerializer(candidate_results, many=True, context={'request': request}).data
 
     def get_turnout(self, obj):
@@ -128,7 +128,7 @@ class ElectionResultSerializer(serializers.ModelSerializer):
 
     def _get_top_results(self, obj):
         if not hasattr(self, '_top_results_cache'):
-            results = list(obj.candidate_results.all().order_by('-vote_count'))
+            results = list(obj.candidate_results.select_related('candidate', 'election_result').all().order_by('-vote_count'))
             self._top_results_cache = results
         return self._top_results_cache
 

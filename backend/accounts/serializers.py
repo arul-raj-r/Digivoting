@@ -237,16 +237,54 @@ class GoogleAuthSerializer(serializers.Serializer):
 
 class VerifyEmailSerializer(serializers.Serializer):
     """
-    Serializer for Email Verification token (Module 4).
+    Serializer for Email Verification (Module 4).
+    Supports either link verification token (64-char token)
+    or direct email + 6-digit OTP verification code.
     """
     token = serializers.CharField(
-        required=True,
+        required=False,
         max_length=128,
-        error_messages={
-            'required': 'Verification token is required.',
-            'blank': 'Verification token cannot be blank.'
-        }
+        allow_blank=True,
+        default=''
     )
+    verification_token = serializers.CharField(
+        required=False,
+        max_length=128,
+        allow_blank=True,
+        default=''
+    )
+    email = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    otp_code = serializers.CharField(
+        required=False,
+        max_length=10,
+        allow_blank=True,
+        default=''
+    )
+    otp = serializers.CharField(
+        required=False,
+        max_length=10,
+        allow_blank=True,
+        default=''
+    )
+
+    def validate(self, attrs):
+        raw_token = (attrs.get('token') or attrs.get('verification_token') or '').strip()
+        raw_email = attrs.get('email', '').strip().lower()
+        raw_otp = (attrs.get('otp_code') or attrs.get('otp') or '').strip()
+
+        if not raw_token and not (raw_email and raw_otp):
+            raise serializers.ValidationError({
+                'token': 'A valid verification link token or email with 6-digit verification code is required.'
+            })
+
+        attrs['token'] = raw_token
+        attrs['email'] = raw_email
+        attrs['otp_code'] = raw_otp
+        return attrs
 
 
 class ResendVerificationSerializer(serializers.Serializer):

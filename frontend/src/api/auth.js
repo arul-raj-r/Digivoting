@@ -1,14 +1,7 @@
-import axios from 'axios';
+import api from './api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const apiClient = api;
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 /**
  * Register a new voter account on DigiVote (Module 1).
@@ -25,8 +18,11 @@ export const register = async (userData) => {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'Registration failed.');
       formattedError.status = error.response.status;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
       formattedError.field = errData.field || null;
       formattedError.errors = errData.errors || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     throw new Error('Network error. Unable to connect to the registration service.');
@@ -48,12 +44,14 @@ export const login = async (credentials) => {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'Login failed.');
       formattedError.status = error.response.status;
-      formattedError.code = errData.code || null;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
       formattedError.warning = errData.warning || null;
       formattedError.failed_attempts = errData.failed_attempts || null;
       formattedError.resend_available = errData.resend_available || false;
       formattedError.field = errData.field || null;
       formattedError.errors = errData.errors || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     if (error.response?.status === 429) {
@@ -91,20 +89,23 @@ export const googleLogin = async (idToken) => {
 };
 
 /**
- * Verify citizen email using token from verification link (Module 4).
- * @param {string} token - 64-character verification token
+ * Verify citizen email using token from verification link OR { email, otp_code } (Module 4).
+ * @param {string|Object} tokenOrPayload - Token string or { email, otp_code }
  * @returns {Promise<Object>} API response payload
  */
-export const verifyEmail = async (token) => {
+export const verifyEmail = async (tokenOrPayload) => {
   try {
-    const response = await apiClient.post('/auth/verify-email/', { token });
+    const payload = typeof tokenOrPayload === 'string' ? { token: tokenOrPayload } : tokenOrPayload;
+    const response = await apiClient.post('/auth/verify-email/', payload);
     return response.data;
   } catch (error) {
     if (error.response && error.response.data) {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'Email verification failed.');
       formattedError.status = error.response.status;
-      formattedError.code = errData.code || null;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     throw new Error('Network error. Unable to connect to email verification service.');
@@ -125,7 +126,9 @@ export const resendVerification = async (email) => {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'Failed to resend verification email.');
       formattedError.status = error.response.status;
-      formattedError.code = errData.code || null;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     throw new Error('Network error. Unable to connect to verification service.');
@@ -146,7 +149,9 @@ export const sendOTP = async (preAuthToken) => {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'Failed to send verification code.');
       formattedError.status = error.response.status;
-      formattedError.code = errData.code || null;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     throw new Error('Network error. Unable to connect to OTP service.');
@@ -171,9 +176,11 @@ export const verifyOTP = async (preAuthToken, otpCode) => {
       const errData = error.response.data;
       const formattedError = new Error(errData.message || 'OTP verification failed.');
       formattedError.status = error.response.status;
-      formattedError.code = errData.code || null;
+      formattedError.code = errData.code || error.code || null;
+      formattedError.action = errData.action || error.action || null;
       formattedError.attemptsRemaining = errData.attempts_remaining ?? null;
       formattedError.errors = errData.errors || null;
+      formattedError.response = error.response;
       throw formattedError;
     }
     throw new Error('Network error. Unable to connect to MFA verification service.');

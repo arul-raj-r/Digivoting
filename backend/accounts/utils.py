@@ -14,26 +14,45 @@ logger = logging.getLogger(__name__)
 
 def generate_and_send_verification_email(user, request=None):
     """
-    Module 4: Email Verification Token Generator & Dispatcher.
+    Module 4: Email Verification Token & OTP Generator and Dispatcher.
     - Generates 64-char cryptographically random URL-safe raw token.
-    - Stores ONLY SHA-256 hash in database (hash-only token storage best practice).
-    - Raw token exists solely in the verification URL emailed to citizen.
-    - Invalidates all previous unused tokens for this user.
-    - Renders official ECI civic HTML & plaintext email templates.
+    - Stores SHA-256 hash in EmailVerificationToken database.
+    - Generates 6-digit numeric OTP stored with SHA-256 hash in OTPVerification (purpose='EMAIL_VERIFICATION').
+    - Renders official DigiVote civic HTML & plaintext email templates containing BOTH OTP and link.
     """
-    # Generate 64-character URL-safe random token
+    from authentication.models import OTPVerification
+
+    # 1. Generate 64-character URL-safe random token
     raw_token = secrets.token_urlsafe(48)
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     expires_at = timezone.now() + timedelta(hours=24)
 
-    # Invalidate previous unused tokens for this user
+    # Invalidate previous unused link tokens for this user
     EmailVerificationToken.objects.filter(user=user, used=False).update(used=True)
 
-    # Store hash in DB
+    # Store link token hash in DB
     EmailVerificationToken.objects.create(
         user=user,
         token_hash=token_hash,
         expires_at=expires_at,
+        used=False
+    )
+
+    # 2. Generate 6-digit numeric OTP code
+    plain_otp = f"{secrets.randbelow(900000) + 100000}"
+    otp_hash = hashlib.sha256(plain_otp.encode()).hexdigest()
+    otp_expires_at = timezone.now() + timedelta(minutes=15)
+
+    # Invalidate previous unused email verification OTPs for this user
+    OTPVerification.objects.filter(user=user, purpose='EMAIL_VERIFICATION', used=False).update(used=True)
+
+    OTPVerification.objects.create(
+        user=user,
+        purpose='EMAIL_VERIFICATION',
+        code_hash=otp_hash,
+        expires_at=otp_expires_at,
+        attempt_count=0,
+        max_attempts=5,
         used=False
     )
 
@@ -48,7 +67,9 @@ def generate_and_send_verification_email(user, request=None):
     context = {
         'user_full_name': full_name or user.email,
         'verification_url': verification_url,
+        'otp_code': plain_otp,
         'expires_hours': 24,
+        'otp_expires_minutes': 15,
     }
 
     try:
@@ -58,7 +79,9 @@ def generate_and_send_verification_email(user, request=None):
         logger.warning("Could not render template: %s. Using fallback plain text.", e)
         plain_message = (
             f"Citizen {full_name},\n\n"
-            f"Please verify your DigiVote email address by opening this link:\n{verification_url}\n\n"
+            f"Your DigiVote Email Verification Code is: {plain_otp}\n"
+            f"(This code is valid for 15 minutes).\n\n"
+            f"Alternatively, you may verify directly by opening this link:\n{verification_url}\n\n"
             f"This link expires in 24 hours."
         )
         html_message = None
@@ -67,20 +90,23 @@ def generate_and_send_verification_email(user, request=None):
 
     try:
         send_mail(
-            subject='Verify Your DigiVote Account - Election Commission of India',
+            subject='Verify Your DigiVote Account - One-Time Verification Code',
             message=plain_message,
             from_email=from_email,
             recipient_list=[user.email],
             html_message=html_message,
             fail_silently=False,
         )
-        logger.info("Verification email successfully dispatched to: %s", user.email)
+        logger.info("Verification email successfully dispatched to %s with OTP: %s", user.email, plain_otp)
     except Exception as e:
         logger.error("Failed to send verification email to %s: %s", user.email, str(e), exc_info=True)
+
+    print(f"\n[DIGIVOTE VERIFICATION OTP] Verification code for '{user.email}': {plain_otp}\n", flush=True)
 
     return {
         'raw_token': raw_token,
         'token_hash': token_hash,
+        'otp_code': plain_otp,
         'expires_at': expires_at,
         'verification_url': verification_url
     }

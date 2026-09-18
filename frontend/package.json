@@ -2,10 +2,12 @@
   "name": "digivote-frontend",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "description": "Secure Digital Voting Platform Frontend",
   "main": "src/main.jsx",
   "scripts": {
     "dev": "vite",
+    "start": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -13,10 +15,11 @@
     "axios": "^1.19.0",
     "chart.js": "^4.4.2",
     "lucide-react": "^1.31.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.8",
+    "react-chartjs-2": "^5.2.0",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2",
-    "react-chartjs-2": "^5.2.0"
+    "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

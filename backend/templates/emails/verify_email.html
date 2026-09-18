@@ -95,11 +95,19 @@
     <div class="content">
       <p>Hello <strong>{{ user_full_name }}</strong>,</p>
       <p>
-        Thank you for registering on the DigiVote Platform. Please confirm your email address by clicking the button below to activate your account:
+        Thank you for registering on the DigiVote Platform. Please confirm your email address by entering the verification code below or by clicking the verification button:
       </p>
 
+      {% if otp_code %}
+      <div style="text-align: center; margin: 24px 0; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: bold; display: block; margin-bottom: 8px;">Your One-Time Verification Code</span>
+        <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #1e293b; font-family: monospace;">{{ otp_code }}</div>
+        <span style="font-size: 12px; color: #64748b; display: block; margin-top: 6px;">Valid for {{ otp_expires_minutes|default:15 }} minutes</span>
+      </div>
+      {% endif %}
+
       <div class="button-container">
-        <a href="{{ verification_url }}" class="verify-btn">Verify Email Address</a>
+        <a href="{{ verification_url }}" class="verify-btn">Verify Email Directly</a>
       </div>
 
       <p class="link-fallback">

@@ -21,32 +21,32 @@ export default function Security() {
     {
       title: 'Secure Authentication & Password Hashing',
       icon: Key,
-      badge: 'Module 1 & 2',
-      details: 'Passphrases are salted and hashed using PBKDF2 / Argon2 cryptographic functions. Account lockout mechanisms automatically trigger after consecutive failed attempts to thwart automated credential-stuffing.'
+      badge: 'Account Security',
+      details: 'Passphrases are salted and hashed using PBKDF2 cryptographic algorithms. Account lockout mechanisms automatically trigger after consecutive failed attempts to thwart credential stuffing.'
     },
     {
       title: 'Email Domain & Ownership Verification',
       icon: Mail,
-      badge: 'Module 4',
-      details: 'Tokens generated for email confirmation are single-use, time-bound, and stored as cryptographic hashes. Resend intervals enforce server-side 30-second cooldown windows to eliminate spam and resource exhaustion.'
+      badge: 'Identity Proofing',
+      details: 'Tokens generated for email confirmation are single-use, time-bound, and stored as cryptographic hashes. Resend intervals enforce server-side cooldown windows to prevent email fatigue.'
     },
     {
       title: 'Multi-Factor OTP Authentication',
       icon: ShieldCheck,
-      badge: 'Module 5',
-      details: '6-digit authentication challenges are generated dynamically, hashed with SHA-256 before storage, and expire in 5 minutes. The backend enforces a maximum attempt limit (default: 3 attempts) before invalidating the challenge.'
+      badge: 'MFA Protection',
+      details: '6-digit authentication challenges are generated dynamically, hashed with SHA-256 before storage, and expire in 5 minutes. The backend enforces attempt limits before invalidating the challenge.'
     },
     {
       title: 'Session Management & Device Revocation',
       icon: Laptop,
-      badge: 'Module 6',
-      details: 'Active sessions maintain distinct refresh token identifiers (JTI) tracked in database records. Citizens can audit all currently signed-in devices with IP addresses and user agents, and revoke individual or all sessions remotely.'
+      badge: 'Session Security',
+      details: 'Active sessions maintain distinct refresh token identifiers (JTI) tracked in database records. Users can audit all active sessions with IP addresses and user agents, and revoke sessions remotely.'
     },
     {
-      title: 'Role-Based Access Control (RBAC)',
+      title: 'Role & Ownership Access Control',
       icon: UserCheck,
       badge: 'Platform Security',
-      details: 'Authorization is governed strictly by the Django backend using custom permissions. Frontend views merely reflect granted capabilities; no client-side claims or tokens can override backend role restrictions.'
+      details: 'Authorization is governed strictly by the Django backend using custom permissions. Frontend views merely reflect granted capabilities; no client-side claims or tokens can override backend restrictions.'
     },
     {
       title: 'Voter Eligibility Roster Validation',
@@ -58,7 +58,7 @@ export default function Security() {
       title: 'Webcam Face Verification',
       icon: Camera,
       badge: 'Biometric Pipeline',
-      details: 'When webcam verification is enabled for an election, real-time client camera captures are compared against authorized photo embeddings using OpenCV and ArcFace models, confirming physical voter presence.'
+      details: 'When webcam verification is enabled for an election, real-time camera captures are compared against authorized photo embeddings using OpenCV and SFace models, confirming physical voter presence.'
     },
     {
       title: 'One-Time Single-Use Voting Authorization',
@@ -67,15 +67,15 @@ export default function Security() {
       details: 'Following successful OTP challenge and facial verification, a short-lived, single-use voting authorization token is minted. It must be consumed at the exact moment the ballot is cast, preventing multi-casting.'
     },
     {
-      title: 'Confidential Ballot Handling',
+      title: 'Confidential Ballot Decoupling',
       icon: Lock,
       badge: 'Ballot Secrecy',
-      details: 'Ballots are encrypted with symmetric per-election keys and deliberately lack any foreign key association to the voter. Timestamps are truncated to the minute to prevent statistical correlation attacks.'
+      details: 'Ballots are stored in an isolated table with zero foreign keys to voter accounts. Timestamps are truncated to the minute to prevent statistical correlation attacks while preserving tally integrity.'
     },
     {
       title: 'Centralized Audit & Security Event Logging',
       icon: Terminal,
-      badge: 'Module 7',
+      badge: 'Governance Audit',
       details: 'All security events (logins, lockouts, verification challenges, election state changes, result calculations) are written to persistent audit logs with severity levels, client IP addresses, and timestamps.'
     }
   ];
@@ -83,17 +83,17 @@ export default function Security() {
   return (
     <PublicLayout>
       {/* Header Banner */}
-      <section className="py-16 lg:py-24 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#070b14]/50">
+      <section className="py-16 lg:py-24 border-b border-sage-200 dark:border-graphite-800 bg-ivory/50 dark:bg-graphite-950/60">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-forest-50 dark:bg-forest-950/50 border border-forest-600/20 text-forest-700 dark:text-forest-400 text-xs font-semibold">
             <ShieldCheck className="w-4 h-4" />
             <span>Verified Architectural Security</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-serif font-black text-graphite-900 dark:text-ivory tracking-tight">
             Security Architecture
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            DigiVote is built upon verified security mechanisms designed to protect election integrity, voter confidentiality, and system auditability.
+          <p className="text-sm sm:text-base text-graphite-600 dark:text-sage-400 max-w-2xl mx-auto leading-relaxed">
+            DigiVote is built upon verified security mechanisms designed to protect election integrity, voter confidentiality, and institutional auditability.
           </p>
         </div>
       </section>
@@ -107,23 +107,23 @@ export default function Security() {
               return (
                 <div 
                   key={idx}
-                  className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 depth-card flex flex-col justify-between"
+                  className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm flex flex-col justify-between hover:border-forest-600/30 transition-all"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-forest-50 dark:bg-forest-950/60 border border-forest-600/20 text-forest-700 dark:text-forest-400 flex items-center justify-center">
                         <Icon className="w-5 h-5" />
                       </div>
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sage-100 dark:bg-graphite-800 text-graphite-700 dark:text-sage-300">
                         {feat.badge}
                       </span>
                     </div>
 
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    <h3 className="text-base font-bold text-graphite-900 dark:text-ivory">
                       {feat.title}
                     </h3>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    <p className="text-xs text-graphite-600 dark:text-sage-400 leading-relaxed">
                       {feat.details}
                     </p>
                   </div>
@@ -135,18 +135,18 @@ export default function Security() {
       </section>
 
       {/* Security Policy Statement */}
-      <section className="py-16 bg-slate-50 dark:bg-[#070b14] border-t border-slate-200/80 dark:border-slate-800/80">
+      <section className="py-16 bg-sage-50/50 dark:bg-graphite-950 border-t border-sage-200 dark:border-graphite-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+          <h2 className="text-xl font-serif font-bold text-graphite-900 dark:text-ivory">
             Transparency & Verification Policy
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-graphite-600 dark:text-sage-400 max-w-2xl mx-auto leading-relaxed">
             DigiVote does not make unverified cryptographic claims or advertise artificial certifications. Every security guarantee described on this platform corresponds directly to tested backend code and verified database operations.
           </p>
           <div className="pt-2">
             <Link
               to="/contact"
-              className="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+              className="inline-flex items-center gap-2 text-xs font-bold text-forest-700 dark:text-forest-400 hover:underline"
             >
               <span>Have security questions? Contact our team</span>
               <ArrowRight className="w-3.5 h-3.5" />

@@ -9,10 +9,46 @@ from elections.models import EligibleVoter
 MAX_CSV_FILE_SIZE = 5 * 1024 * 1024  # 5 MB ceiling
 MAX_CSV_ROWS = 25000                 # 25,000 rows ceiling
 
+def sanitize_identity_field(val: str, field_type: str = 'text') -> str:
+    """
+    Sanitizes voter identity input for database storage without altering
+    canonical identity values (e.g. preserves '+' on international phone numbers,
+    '-' on student/employee IDs). Strips unprintable control characters and formula triggers (=, @).
+    """
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    # Disarm dangerous formula execution triggers without stripping valid identity prefixes
+    if val_str.startswith(('=', '@')):
+        val_str = re.sub(r'^[=@]+', '', val_str).strip()
+    # Disarm control characters
+    val_str = val_str.replace('\t', ' ').replace('\r', '').replace('\n', ' ').strip()
+    return val_str
+
+def sanitize_csv_cell(val: str) -> str:
+    """Backward compatible alias for identity field sanitization."""
+    return sanitize_identity_field(val)
+
+def disarm_formula_for_export(val: str) -> str:
+    """
+    Prepends a single quote when exporting to a spreadsheet file if the cell
+    starts with formula triggers (=, +, -, @) so that spreadsheet software
+    displays it as literal text rather than executing it.
+    """
+    if not val:
+        return ""
+    val_str = str(val)
+    if val_str and val_str[0] in ('=', '+', '-', '@'):
+        return f"'{val_str}"
+    return val_str
+
 def parse_and_validate_voters_csv(file_obj, election, dry_run=False):
     """
     Validates and optionally bulk registers eligible voters from a CSV file.
-    Supports columns: email (required), name, student_id, mobile_number.
+    Requires the creator-facing voter-roll schema:
+    ``student_id, full_name, email, mobile``.  The stored model uses ``name``
+    and ``mobile_number`` internally, but imports intentionally use the clear
+    public template fields.
     - If dry_run=True: Performs validation, identifies valid/invalid/duplicate records,
       and returns preview rows without committing to database.
     - If dry_run=False: Bulk inserts only the valid non-duplicate records into the database.
@@ -38,25 +74,19 @@ def parse_and_validate_voters_csv(file_obj, election, dry_run=False):
     # Check header
     raw_header = [h.strip().lower() for h in rows[0]]
     
-    # Resolve column indexes flexibly
-    email_idx = None
-    name_idx = None
-    student_id_idx = None
-    mobile_idx = None
+    normalized_header = [h.replace(' ', '_').replace('-', '_') for h in raw_header]
+    required_columns = ('student_id', 'full_name', 'email', 'mobile')
+    missing_columns = [column for column in required_columns if column not in normalized_header]
+    if missing_columns:
+        raise ValueError(
+            "CSV header must contain exactly the required fields: "
+            "student_id, full_name, email, mobile. Missing: " + ', '.join(missing_columns) + '.'
+        )
 
-    for idx, h in enumerate(raw_header):
-        normalized = h.replace(' ', '_').replace('-', '_')
-        if normalized in ['email', 'e_mail', 'mail', 'email_address']:
-            email_idx = idx
-        elif normalized in ['name', 'full_name', 'fullname', 'voter_name']:
-            name_idx = idx
-        elif normalized in ['student_id', 'studentid', 'roll_no', 'roll_number', 'rollno', 'voter_id', 'id_number', 'id']:
-            student_id_idx = idx
-        elif normalized in ['mobile_number', 'mobile', 'phone', 'phone_number', 'contact', 'contact_number']:
-            mobile_idx = idx
-
-    if email_idx is None:
-        raise ValueError("CSV header must contain an 'email' column (e.g., name,email,mobile_number,student_id).")
+    student_id_idx = normalized_header.index('student_id')
+    name_idx = normalized_header.index('full_name')
+    email_idx = normalized_header.index('email')
+    mobile_idx = normalized_header.index('mobile')
 
     data_rows = rows[1:]
 
@@ -73,7 +103,7 @@ def parse_and_validate_voters_csv(file_obj, election, dry_run=False):
     existing_student_ids = {r['student_id'].lower() for r in existing_records if r['student_id']}
 
     # 6. Pre-fetch existing Users matching these emails to link
-    all_row_emails = [r[email_idx].strip().lower() for r in data_rows if len(r) > email_idx and r[email_idx].strip()]
+    all_row_emails = [sanitize_csv_cell(r[email_idx]).lower() for r in data_rows if len(r) > email_idx and r[email_idx].strip()]
     user_map = {
         u.email.lower(): u
         for u in User.objects.filter(email__in=all_row_emails)
@@ -91,11 +121,11 @@ def parse_and_validate_voters_csv(file_obj, election, dry_run=False):
         if not row or not any(field.strip() for field in row):
             continue  # Ignore empty blank lines
 
-        # Extract values
-        raw_email = row[email_idx].strip() if len(row) > email_idx else ""
-        raw_name = row[name_idx].strip() if name_idx is not None and len(row) > name_idx else ""
-        raw_student_id = row[student_id_idx].strip() if student_id_idx is not None and len(row) > student_id_idx else ""
-        raw_mobile = row[mobile_idx].strip() if mobile_idx is not None and len(row) > mobile_idx else ""
+        # Extract and sanitize values against spreadsheet formula injection
+        raw_email = sanitize_csv_cell(row[email_idx]) if len(row) > email_idx else ""
+        raw_name = sanitize_csv_cell(row[name_idx]) if name_idx is not None and len(row) > name_idx else ""
+        raw_student_id = sanitize_csv_cell(row[student_id_idx]) if student_id_idx is not None and len(row) > student_id_idx else ""
+        raw_mobile = sanitize_csv_cell(row[mobile_idx]) if mobile_idx is not None and len(row) > mobile_idx else ""
 
         cleaned_email = raw_email.lower()
         cleaned_student_id = raw_student_id.lower()
@@ -109,6 +139,23 @@ def parse_and_validate_voters_csv(file_obj, election, dry_run=False):
                 "student_id": raw_student_id,
                 "mobile": raw_mobile,
                 "reason": "Email field is empty",
+                "status": "INVALID"
+            })
+            continue
+
+        if not raw_name or not raw_student_id or not raw_mobile:
+            missing_fields = [
+                label for label, value in (
+                    ('student_id', raw_student_id), ('full_name', raw_name), ('mobile', raw_mobile)
+                ) if not value
+            ]
+            invalid_records.append({
+                "row": row_idx,
+                "name": raw_name,
+                "email": raw_email,
+                "student_id": raw_student_id,
+                "mobile": raw_mobile,
+                "reason": "Required field(s) missing: " + ', '.join(missing_fields),
                 "status": "INVALID"
             })
             continue

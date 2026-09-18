@@ -396,7 +396,8 @@ class ElectionCreationModuleTests(TransactionTestCase):
 
     def test_creator_can_only_list_their_own_elections(self):
         """
-        Verification: Election creators only see their own elections; platform admins can see all.
+        Verification: every product account, including a system admin account,
+        only sees elections it created through the normal election API.
         """
         # Create election by Creator 2
         election_2 = Election.objects.create(
@@ -414,27 +415,29 @@ class ElectionCreationModuleTests(TransactionTestCase):
         self.assertIn(str(self.election_1.id), election_ids_1)
         self.assertNotIn(str(election_2.id), election_ids_1)
 
-        # 2. Platform Admin views list
+        # 2. A platform-admin account does not receive another creator's
+        # election-management list through the product API.
         self.client.force_authenticate(user=self.admin_user)
         res_admin = self.client.get('/api/elections/')
         self.assertEqual(res_admin.status_code, status.HTTP_200_OK)
         all_ids = [e['id'] for e in res_admin.data]
-        self.assertIn(str(self.election_1.id), all_ids)
-        self.assertIn(str(election_2.id), all_ids)
+        self.assertNotIn(str(self.election_1.id), all_ids)
+        self.assertNotIn(str(election_2.id), all_ids)
 
     def test_detail_view_permissions(self):
         """
-        Verification: GET /api/elections/<id>/ allows creator and admin; rejects other creators with 403.
+        Verification: GET /api/elections/<id>/ allows the creator and rejects
+        other authenticated users, including platform admins, for drafts.
         """
         # Creator 1 views their own
         self.client.force_authenticate(user=self.creator_user_1)
         res1 = self.client.get(f'/api/elections/{self.election_1.id}/')
         self.assertEqual(res1.status_code, status.HTTP_200_OK)
 
-        # Platform admin views Creator 1's election
+        # Platform admin cannot use the product endpoint as an organizer.
         self.client.force_authenticate(user=self.admin_user)
         res_admin = self.client.get(f'/api/elections/{self.election_1.id}/')
-        self.assertEqual(res_admin.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_admin.status_code, status.HTTP_403_FORBIDDEN)
 
         # Creator 2 attempts to view Creator 1's election -> 403
         self.client.force_authenticate(user=self.creator_user_2)
@@ -591,11 +594,11 @@ class VoterAndCandidateModuleTests(TransactionTestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         csv_content = (
-            "email\n"
-            "valid1@example.com\n"
-            "malformed-email\n"
-            "valid2@example.com\n"
-            "valid1@example.com\n" # Duplicate within CSV
+            "student_id,full_name,email,mobile\n"
+            "STU-1,Valid One,valid1@example.com,+911111111111\n"
+            "STU-2,Invalid Email,malformed-email,+922222222222\n"
+            "STU-3,Valid Two,valid2@example.com,+933333333333\n"
+            "STU-4,Duplicate Email,valid1@example.com,+944444444444\n" # Duplicate within CSV
         ).encode('utf-8')
 
         uploaded_file = SimpleUploadedFile("voters.csv", csv_content, content_type="text/csv")
@@ -805,7 +808,7 @@ class VerificationAndScheduleRulesModuleTests(APITestCase):
 
     def test_ownership_permissions_on_verification_and_rules(self):
         """
-        Test: Non-owner creator gets 403; Platform Admin gets 200.
+        Test: non-owners, including platform-admin accounts, receive 403.
         """
         self.client.force_authenticate(user=self.creator_2)
         
@@ -815,10 +818,10 @@ class VerificationAndScheduleRulesModuleTests(APITestCase):
         res2 = self.client.patch(f'/api/elections/{self.election.id}/rules/', {'results_visibility': 'immediate'}, format='json')
         self.assertEqual(res2.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Admin user can view
+        # A platform admin cannot use the organizer API for another creator's election.
         self.client.force_authenticate(user=self.admin_user)
         res3 = self.client.get(f'/api/elections/{self.election.id}/verification-config/')
-        self.assertEqual(res3.status_code, status.HTTP_200_OK)
+        self.assertEqual(res3.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_verification_config_including_biometrics(self):
         """
@@ -1201,6 +1204,26 @@ class ElectionModule11Tests(APITestCase):
         self.election.refresh_from_db()
         self.assertEqual(self.election.status, 'completed')
 
+    def test_detail_access_synchronizes_persisted_schedule(self):
+        """A scheduled election never remains stale when its API is accessed."""
+        self.client.force_authenticate(user=self.creator)
+        self.election.start_datetime = timezone.now() - timedelta(minutes=5)
+        self.election.end_datetime = timezone.now() + timedelta(hours=1)
+        self.election.save()
+
+        live_response = self.client.get(f'/api/elections/{self.election.id}/')
+        self.assertEqual(live_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(live_response.data['status'], 'active')
+        self.assertTrue(live_response.data['is_locked'])
+        self.assertIsNotNone(live_response.data['actual_start_at'])
+
+        self.election.refresh_from_db()
+        self.election.end_datetime = timezone.now() - timedelta(minutes=1)
+        self.election.save()
+        completed_response = self.client.get(f'/api/elections/{self.election.id}/')
+        self.assertEqual(completed_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(completed_response.data['status'], 'completed')
+
     def test_monitoring_endpoint_turnout_aggregation_and_zero_division(self):
         """
         Tests /monitoring/ endpoint:
@@ -1259,6 +1282,3 @@ class ElectionModule11Tests(APITestCase):
         self.assertEqual(res_filtered.status_code, status.HTTP_200_OK)
         for item in res_filtered.data['results']:
             self.assertEqual(item['action'], 'voter_added')
-
-
-

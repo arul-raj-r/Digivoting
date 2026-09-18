@@ -4,22 +4,48 @@
 
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Modern Professional SaaS Palette */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  /* Institutional Civic Palette (Graphite, Ivory, Forest, Sage, Amber) */
+  --color-graphite-950: #0e1013;
+  --color-graphite-900: #14171b;
+  --color-graphite-800: #1b1e24;
+  --color-graphite-700: #262a32;
+  --color-graphite-600: #383d47;
+  --color-graphite-500: #555c68;
 
-  /* Cybersecurity Slate Tokens */
-  --color-cyber-dark: #070b14;
-  --color-cyber-card: #0d1527;
-  --color-cyber-border: #1e293b;
-  --color-cyber-accent: #38bdf8;
-  --color-cyber-emerald: #10b981;
+  --color-ivory-50: #fcfbf9;
+  --color-ivory-100: #f7f5f0;
+  --color-ivory-200: #eeebe3;
+  --color-ivory-300: #ded9cd;
+
+  --color-forest-900: #133325;
+  --color-forest-800: #1a4231;
+  --color-forest-700: #235942;
+  --color-forest-600: #2e7356;
+  --color-forest-500: #3c936f;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+
+  --color-sage-100: #edf2ee;
+  --color-sage-200: #dce5df;
+  --color-sage-300: #c5d4c9;
+  --color-sage-700: #425b4d;
+
+  --color-amber-500: #d97706;
+  --color-amber-600: #b45309;
+
+  --color-terracotta-500: #c25e4e;
+  --color-terracotta-600: #a74839;
+
+  /* Surface & Border System */
+  --color-surface-light: #f7f5f0;
+  --color-surface-card: #ffffff;
+  --color-surface-dark: #121418;
+  --color-surface-dark-card: #191c22;
+  --color-border-light: #e6e2d8;
+  --color-border-dark: #272b34;
 }
 
 @layer base {
@@ -32,113 +58,91 @@
   }
 
   body {
-    background-color: #f8fafc;
-    color: #0f172a;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f7f5f0;
+    color: #181a1f;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   body.dark, html.dark body {
-    background-color: #070b14;
-    color: #f1f5f9;
+    background-color: #101216;
+    color: #f5f4ef;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
   }
 }
 
-/* Biometric 3D Scanner & Cyber Keyframes */
-@keyframes scannerPulse {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.04) rotate(180deg);
-    opacity: 1;
-  }
+/* Institutional Civic Card & Surface Elevation */
+.civic-card {
+  background-color: #ffffff;
+  border: 1px solid #e6e2d8;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 3px 0 rgba(20, 23, 27, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-@keyframes scanLine {
-  0% {
-    top: 5%;
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    top: 95%;
-    opacity: 0.2;
-  }
+.dark .civic-card {
+  background-color: #171a20;
+  border-color: #272b34;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
 }
 
-@keyframes radarPing {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
+.civic-card:hover {
+  border-color: #d1ccbf;
 }
 
-@keyframes floatSubtle {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
+.dark .civic-card:hover {
+  border-color: #383e4a;
 }
 
-.animate-scan-line {
-  animation: scanLine 2.4s ease-in-out infinite alternate;
+/* Structured Electronic Ballot Option Card */
+.ballot-option {
+  border: 1.5px solid #e6e2d8;
+  background-color: #ffffff;
+  border-radius: 0.875rem;
+  transition: all 0.15s ease;
 }
 
-.animate-scanner-pulse {
-  animation: scannerPulse 8s linear infinite;
+.dark .ballot-option {
+  border-color: #272b34;
+  background-color: #171a20;
 }
 
-.animate-radar-ping {
-  animation: radarPing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+.ballot-option:hover {
+  border-color: #9da3af;
 }
 
-.animate-float-subtle {
-  animation: floatSubtle 4s ease-in-out infinite;
+.dark .ballot-option:hover {
+  border-color: #404654;
 }
 
-/* 3D Depth Card Utilities */
-.depth-card {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.ballot-option.selected {
+  border-color: #1a4231;
+  background-color: #edf2ee;
+  box-shadow: 0 0 0 1px #1a4231;
 }
 
-.depth-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+.dark .ballot-option.selected {
+  border-color: #10b981;
+  background-color: rgba(19, 51, 37, 0.35);
+  box-shadow: 0 0 0 1px #10b981;
 }
 
-.dark .depth-card:hover {
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(99, 102, 241, 0.15);
+/* Accessible, hand-tuned focus outline */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid #1a4231;
+  outline-offset: 2px;
 }
 
-/* Glassmorphism surfaces */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-.dark .glass-panel {
-  background: rgba(13, 21, 39, 0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(30, 41, 59, 0.75);
+.dark .focus-ring:focus-visible {
+  outline: 2px solid #10b981;
 }
 
 /* Custom subtle scrollbar */
@@ -150,43 +154,17 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6d1c4;
   border-radius: 9999px;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #272b34;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #b5aea0;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
-}
-
-/* Subtle 3D Perspective Utilities */
-.perspective-1000 {
-  perspective: 1000px;
-}
-
-.preserve-3d {
-  transform-style: preserve-3d;
-}
-
-.rotate-x-6 {
-  transform: rotateX(6deg);
-}
-
-.rotate-y-6 {
-  transform: rotateY(-6deg);
-}
-
-.card-3d {
-  transform: perspective(1000px) rotateX(2deg) rotateY(-2deg);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
-}
-
-.card-3d:hover {
-  transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(-4px);
+  background: #3a404c;
 }
 
 @media (prefers-reduced-motion: reduce) {

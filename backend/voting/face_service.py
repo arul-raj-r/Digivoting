@@ -201,7 +201,7 @@ def verify_voter_face(user, live_image_b64: str) -> dict:
                 "enrolled": False,
                 "confidence": float(cosine_sim),
                 "l2_distance": float(l2_dist),
-                "message": "Biometric face verification successful."
+                "message": "Webcam face verification successful."
             }
         else:
             return {

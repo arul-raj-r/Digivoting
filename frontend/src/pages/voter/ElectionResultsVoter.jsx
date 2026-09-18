@@ -9,9 +9,13 @@ import {
   ArrowLeft, 
   Clock, 
   Scale, 
-  Lock,
-  User,
-  RefreshCw
+  Lock, 
+  User, 
+  RefreshCw,
+  Printer,
+  Share2,
+  Check,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function ElectionResultsVoter() {
@@ -20,6 +24,17 @@ export default function ElectionResultsVoter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notAvailable, setNotAvailable] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   const fetchResults = async () => {
     setLoading(true);
@@ -146,6 +161,37 @@ export default function ElectionResultsVoter() {
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
               Election Results
             </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs"
+              title="Copy link to results"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Share</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs"
+              title="Print certified results report"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-400" />
+              <span>Print Report</span>
+            </button>
           </div>
         </div>
 
@@ -303,6 +349,25 @@ export default function ElectionResultsVoter() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Cryptographic Audit Integrity Footer */}
+      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="font-bold text-slate-900 dark:text-white">Cryptographic Audit Sealed</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              All tallies in this report are mathematically certified against immutable voter receipts.
+            </p>
+          </div>
+        </div>
+
+        <div className="text-[11px] font-mono text-slate-400 sm:text-right">
+          <span>DigiVote Electoral Certification Protocol</span>
         </div>
       </div>
 

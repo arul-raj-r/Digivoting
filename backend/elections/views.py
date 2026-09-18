@@ -44,7 +44,8 @@ from elections.permissions import (
     CanManageElections,
     IsElectionCreator,
     check_election_configuration_unlocked,
-    check_election_rescheduling_allowed
+    check_election_rescheduling_allowed,
+    synchronize_election_lifecycle,
 )
 from elections.audit import log_election_action
 
@@ -53,17 +54,15 @@ class ElectionListCreateView(APIView):
     """
     Module 8: Election Creation and Creator Election Listing.
     POST /api/elections/: Create a new election with status='draft', created_by=request.user.
-    GET /api/elections/: List elections created by requesting user (or all if staff/admin).
+    GET /api/elections/: List elections created by the requesting user.
     """
     permission_classes = [CanManageElections]
 
     def get(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser or user.role == User.ADMIN:
-            queryset = Election.objects.all().order_by('-created_at')
-        else:
-            queryset = Election.objects.filter(created_by=user).order_by('-created_at')
-        
+        queryset = Election.objects.filter(created_by=user).select_related('created_by', 'stopped_by').order_by('-created_at')
+        for election in queryset:
+            synchronize_election_lifecycle(election)
         serializer = ElectionSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -93,7 +92,10 @@ class ElectionDetailView(APIView):
         - Once 'active', 'completed', or 'cancelled', or if is_locked: Fully locked.
     DELETE /api/elections/<id>/: Delete election (Creator only, status=='draft' only).
     """
-    permission_classes = [permissions.IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get_object(self, pk):
         try:
@@ -105,22 +107,42 @@ class ElectionDetailView(APIView):
         election = self.get_object(pk)
         if not election:
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
+        synchronize_election_lifecycle(election)
 
         user = request.user
-        # Only the creator or a platform admin/staff can view it prior to publishing
-        if not (election.created_by == user or user.is_staff or user.is_superuser or user.role == User.ADMIN):
-            return Response({"error": "You do not have permission to view this election."}, status=status.HTTP_403_FORBIDDEN)
+        is_authenticated = user and user.is_authenticated
+        is_creator_or_admin = is_authenticated and election.created_by == user
 
-        return Response(ElectionSerializer(election).data, status=status.HTTP_200_OK)
+        # Draft elections can only be viewed by the creator or admin
+        if election.status == 'draft' and not is_creator_or_admin:
+            return Response({"error": "This election is still in draft mode and not published."}, status=status.HTTP_403_FORBIDDEN)
+
+        data = ElectionSerializer(election).data
+        if is_authenticated:
+            roll = EligibleVoter.objects.filter(
+                models.Q(email__iexact=user.email) | models.Q(user=user),
+                election=election
+            ).first()
+            data['is_eligible'] = bool(roll)
+            data['already_voted'] = roll.has_voted if roll else False
+            data['verification_status'] = roll.verification_status if roll else None
+            data['is_creator'] = (election.created_by == user)
+        else:
+            data['is_eligible'] = False
+            data['already_voted'] = False
+            data['is_creator'] = False
+
+        return Response(data, status=status.HTTP_200_OK)
 
     def patch(self, request, pk):
         election = self.get_object(pk)
         if not election:
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
+        synchronize_election_lifecycle(election)
 
         user = request.user
-        # Only creator can edit (or superuser)
-        if election.created_by != user and not (user.is_staff or user.is_superuser):
+        # Only the election's creator manages it through the product API.
+        if election.created_by != user:
             return Response({"error": "Only the creator of this election can edit it."}, status=status.HTTP_403_FORBIDDEN)
 
         # Check overall lock
@@ -147,6 +169,7 @@ class ElectionDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+        prior_status = election.status
         serializer = ElectionUpdateSerializer(election, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -154,11 +177,11 @@ class ElectionDetailView(APIView):
         updated_election = serializer.save()
 
         # Determine specific audit action
-        if 'status' in request.data and request.data['status'] != election.status:
+        if 'status' in request.data and request.data['status'] != prior_status:
             action_type = 'status_changed'
-            details = {'from': election.status, 'to': updated_election.status}
+            details = {'from': prior_status, 'to': updated_election.status}
         else:
-            action_type = 'created' if election.status == 'draft' else 'status_changed'
+            action_type = 'created' if prior_status == 'draft' else 'status_changed'
             details = {'updated_fields': list(request.data.keys())}
 
         log_election_action(
@@ -177,7 +200,7 @@ class ElectionDetailView(APIView):
 
         user = request.user
         # Only creator can delete
-        if election.created_by != user and not (user.is_staff or user.is_superuser):
+        if election.created_by != user:
             return Response({"error": "Only the creator of this election can delete it."}, status=status.HTTP_403_FORBIDDEN)
 
         # Enforce draft status check: Deleting a non-draft election is rejected
@@ -206,14 +229,14 @@ class ElectionDetailView(APIView):
 
 def get_election_for_creator_or_403(election_id, request_user):
     """
-    Helper function to retrieve election and enforce creator/admin ownership.
+    Retrieve an election and enforce its creator's ownership.
     """
     try:
         election = Election.objects.get(pk=election_id)
     except (Election.DoesNotExist, ValueError):
         return None, Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    if election.created_by != request_user and not (request_user.is_staff or request_user.is_superuser or request_user.role == User.ADMIN):
+    if election.created_by != request_user:
         return None, Response({"error": "You do not have permission to manage this election."}, status=status.HTTP_403_FORBIDDEN)
 
     return election, None
@@ -423,6 +446,13 @@ class CandidateListCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        proposed_name = request.data.get('full_name', '').strip()
+        if proposed_name and election.candidates.filter(full_name__iexact=proposed_name).exists():
+            return Response(
+                {"full_name": ["A candidate with this name is already registered for this election."]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = CandidateModelSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -486,6 +516,13 @@ class CandidateDetailView(APIView):
         serializer = CandidateModelSerializer(candidate, data=request.data, partial=True, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        proposed_name = serializer.validated_data.get('full_name')
+        if proposed_name and election.candidates.exclude(pk=candidate.pk).filter(full_name__iexact=proposed_name).exists():
+            return Response(
+                {"full_name": ["A candidate with this name is already registered for this election."]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         updated_candidate = serializer.save()
 
@@ -702,19 +739,6 @@ class VoterElectionsListView(APIView):
     def get(self, request):
         user = request.user
         
-        # Admin gets all elections directly
-        if user.role == 'ADMIN':
-            elections = Election.objects.all().order_by('-created_at')
-            data = []
-            for election in elections:
-                info = ElectionSerializer(election).data
-                info['is_eligible'] = True
-                info['already_voted'] = False
-                info['verification_status'] = 'verified'
-                info['instructions'] = election.description or 'Administrative review mode.'
-                data.append(info)
-            return Response(data, status=status.HTTP_200_OK)
-            
         # Look up eligible voter rolls matching user email or user foreign key
         eligible_rolls = EligibleVoter.objects.filter(
             models.Q(email__iexact=user.email) | models.Q(user=user)
@@ -723,10 +747,11 @@ class VoterElectionsListView(APIView):
         roll_map = {roll.election_id: roll for roll in eligible_rolls}
         
         # Show all non-draft elections so voters can see Available, Active, Scheduled, Completed
-        elections = Election.objects.exclude(status='draft').order_by('-start_datetime')
+        elections = Election.objects.exclude(status='draft').select_related('created_by', 'stopped_by').order_by('-start_datetime')
             
         data = []
         for election in elections:
+            synchronize_election_lifecycle(election)
             roll = roll_map.get(election.id)
             election_info = ElectionSerializer(election).data
             election_info['is_eligible'] = bool(roll)

@@ -13,7 +13,7 @@ cd backend
 # 3. Install/ensure dependencies are installed
 pip install -r requirements.txt
 
-# 4. Set up the local SQLite database structures
+# 4. Set up the PostgreSQL database structures
 python manage.py migrate
 
 # 5. Populate the database with the default admin and voter accounts

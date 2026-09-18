@@ -8,7 +8,6 @@ import ErrorState from '../../components/common/ErrorState';
 import { 
   Vote, 
   PlusCircle, 
-  UserCheck, 
   BarChart2, 
   ShieldCheck, 
   Clock, 
@@ -16,13 +15,11 @@ import {
   CheckCircle2, 
   Calendar,
   RefreshCw,
-  Award,
   Building2,
   Check,
   AlertCircle,
-  ExternalLink,
   Layers,
-  Shield,
+  FileText,
   Lock
 } from 'lucide-react';
 
@@ -30,19 +27,13 @@ export default function VoterDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const displayName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'User';
+  const displayName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Citizen';
 
+  const [activeTab, setActiveTab] = useState('voter'); // 'voter' | 'creator'
   const [createdElections, setCreatedElections] = useState([]);
   const [voterElections, setVoterElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Real-time clock update
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -50,7 +41,12 @@ export default function VoterDashboard() {
     try {
       // 1. Fetch elections created by this user
       const createdPromise = electionApi.getElections()
-        .then((data) => (Array.isArray(data) ? data : data?.results || []))
+        .then((data) => {
+          if (Array.isArray(data)) return data;
+          if (Array.isArray(data?.elections)) return data.elections;
+          if (Array.isArray(data?.results)) return data.results;
+          return [];
+        })
         .catch((err) => {
           console.warn('Could not load created elections:', err);
           return [];
@@ -58,12 +54,17 @@ export default function VoterDashboard() {
 
       // 2. Fetch voter-overview (roster presence and eligibility)
       const voterPromise = electionApi.getVoterOverview()
-        .then((data) => (Array.isArray(data) ? data : data?.results || []))
+        .then((data) => {
+          if (Array.isArray(data)) return data;
+          if (Array.isArray(data?.elections)) return data.elections;
+          if (Array.isArray(data?.results)) return data.results;
+          return [];
+        })
         .catch(async () => {
-          // Fallback to voter eligible elections
           try {
             const fallback = await electionApi.getVoterEligibleElections();
-            return (fallback?.elections || []).map(e => ({
+            const list = fallback?.elections || fallback?.results || (Array.isArray(fallback) ? fallback : []);
+            return list.map(e => ({
               ...e,
               is_eligible: true,
               already_voted: e.has_voted
@@ -78,7 +79,7 @@ export default function VoterDashboard() {
       setVoterElections(voterRes);
     } catch (err) {
       console.error('Failed to load unified dashboard:', err);
-      setError('Unable to load dashboard data. Please check your connection.');
+      setError('Unable to load election data. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -88,23 +89,22 @@ export default function VoterDashboard() {
     loadDashboardData();
   }, []);
 
-  // Compute Creator Activity KPI metrics
-  const creatorCounts = {
-    total: createdElections.length,
-    draft: createdElections.filter(e => (e.status || '').toLowerCase() === 'draft').length,
-    scheduled: createdElections.filter(e => (e.status || '').toLowerCase() === 'scheduled').length,
-    live: createdElections.filter(e => ['active', 'live'].includes((e.status || '').toLowerCase())).length,
-    paused: createdElections.filter(e => (e.status || '').toLowerCase() === 'paused').length,
-    completed: createdElections.filter(e => (e.status || '').toLowerCase() === 'completed').length,
-  };
-
-  // Compute Voter Activity KPI metrics
+  // Compute metrics
   const eligibleVoterList = voterElections.filter(e => e.is_eligible || e.is_eligible === undefined);
-  const voterCounts = {
-    eligible: eligibleVoterList.length,
-    activeNow: eligibleVoterList.filter(e => ['active', 'live'].includes((e.status || '').toLowerCase()) && !e.already_voted && !e.has_voted).length,
-    upcoming: eligibleVoterList.filter(e => ['scheduled', 'configured'].includes((e.status || '').toLowerCase())).length,
-    voted: eligibleVoterList.filter(e => e.already_voted || e.has_voted).length,
+  const totalVotesCast = eligibleVoterList.filter(e => e.already_voted || e.has_voted).length;
+  const completedCount = eligibleVoterList.filter(e => (e.status || '').toLowerCase() === 'completed').length;
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
   if (loading) {
@@ -130,328 +130,380 @@ export default function VoterDashboard() {
   }
 
   return (
-    <div className="space-y-10 pb-16">
+    <div className="space-y-8 pb-16 font-sans">
+      
       {/* ========================================================= */}
-      {/* UNIFIED WELCOME BANNER & PLATFORM SUMMARY                 */}
+      {/* HERO SECTION: WELCOME & PLATFORM CTAS                     */}
       {/* ========================================================= */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div className="space-y-1.5">
+      <div className="p-6 sm:p-8 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
-              UNIFIED PLATFORM WORKSPACE
+            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-[#1a4231]/40 px-2.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+              Institutional Account
             </span>
-            <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <span className="text-xs text-stone-500 font-mono">
+              {user?.email}
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-            Welcome, {displayName}
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight">
+            Welcome back, {displayName}
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
-            You have full access to create & manage organizational elections, upload voter rosters, and participate as a verified voter across all eligible contests.
+          <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+            Access your verified ballots, participate in active institutional elections, and administer created election workspaces.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={loadDashboardData}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            className="p-2.5 rounded-lg border border-stone-300 dark:border-[#262a33] text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#101216] transition-colors"
             title="Refresh dashboard"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
           <Link
             to="/available-elections"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-stone-300 dark:border-[#262a33] text-stone-800 dark:text-stone-200 text-xs font-semibold hover:bg-stone-50 dark:hover:bg-[#101216] transition-colors"
           >
-            <Vote className="w-4 h-4 text-emerald-500" />
-            <span>Available Elections</span>
+            <Vote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Available elections</span>
           </Link>
           <Link
             to="/elections/create"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#101216] hover:bg-[#171a20] dark:bg-[#1a4231] dark:hover:bg-[#1f4f3b] text-white text-xs font-semibold transition-colors border border-[#262a33] dark:border-emerald-700/40"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Create Election</span>
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Create election</span>
           </Link>
         </div>
       </div>
 
       {/* ========================================================= */}
-      {/* CONTEXT 1: MY ELECTION ACTIVITY (CREATOR SECTION)          */}
+      {/* 4 CORE STATS (Civic Editorial Grid)                       */}
       {/* ========================================================= */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                <span>My Election Activity</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
-                  Elections you created & manage
-                </span>
-              </h2>
-            </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs space-y-1">
+          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
+            Eligible to vote
+          </span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 dark:text-stone-100">
+            {eligibleVoterList.length}
           </div>
+          <p className="text-[11px] text-stone-500">Authorized on voter roster</p>
+        </div>
 
-          <Link
-            to="/elections"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+        <div className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs space-y-1">
+          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
+            Created by you
+          </span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 dark:text-stone-100">
+            {createdElections.length}
+          </div>
+          <p className="text-[11px] text-stone-500">Administered election charters</p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs space-y-1">
+          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
+            Votes cast
+          </span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-emerald-700 dark:text-emerald-400">
+            {totalVotesCast}
+          </div>
+          <p className="text-[11px] text-stone-500">Confidential ballots submitted</p>
+        </div>
+
+        <div className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs space-y-1">
+          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
+            Completed contests
+          </span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 dark:text-stone-100">
+            {completedCount}
+          </div>
+          <p className="text-[11px] text-stone-500">Certified public tallies</p>
+        </div>
+
+      </div>
+
+      {/* ========================================================= */}
+      {/* SEGMENTED TAB NAVIGATION                                  */}
+      {/* ========================================================= */}
+      <div className="border-b border-stone-200 dark:border-[#262a33] flex items-center justify-between">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('voter')}
+            className={`pb-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'voter'
+                ? 'border-emerald-700 dark:border-emerald-500 text-stone-900 dark:text-white'
+                : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+            }`}
           >
-            <span>View all my elections ({creatorCounts.total})</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+            <Vote className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Available to vote</span>
+            <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-stone-100 dark:bg-[#101216] text-stone-600 dark:text-stone-400">
+              {eligibleVoterList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('creator')}
+            className={`pb-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'creator'
+                ? 'border-emerald-700 dark:border-emerald-500 text-stone-900 dark:text-white'
+                : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-stone-500" />
+            <span>Created by you</span>
+            <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-stone-100 dark:bg-[#101216] text-stone-600 dark:text-stone-400">
+              {createdElections.length}
+            </span>
+          </button>
         </div>
 
-        {/* Creator KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-mono">Created Total</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.total}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider font-mono">Draft</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.draft}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider font-mono">Scheduled</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.scheduled}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider font-mono">Live Now</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.live}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-orange-500 uppercase tracking-wider font-mono">Paused</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.paused}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider font-mono">Completed</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{creatorCounts.completed}</div>
-          </div>
-        </div>
-
-        {/* Recent Created Elections Cards */}
-        {createdElections.length === 0 ? (
-          <div className="p-8 text-center rounded-3xl bg-white dark:bg-[#0d1527] border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
-              <PlusCircle className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">No elections created yet</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-              You haven't set up any elections yet. Start organizing by creating your first digital voting contest.
-            </p>
-            <Link
-              to="/elections/create"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>Create Your First Election</span>
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {createdElections.slice(0, 3).map((el) => (
-              <div
-                key={el.id}
-                className="p-5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-indigo-500/40 transition-all"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <StatusBadge status={el.status} />
-                    <span className="text-[10px] text-slate-400 font-mono capitalize">
-                      {el.election_type || 'Standard'}
-                    </span>
-                  </div>
-                  <div>
-                    <Link
-                      to={`/elections/${el.id}`}
-                      className="text-sm font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 block line-clamp-1"
-                    >
-                      {el.title || el.name}
-                    </Link>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
-                      {el.description || 'No description added.'}
-                    </p>
-                  </div>
-                  {el.organization && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                      <Building2 className="w-3 h-3" />
-                      <span>{el.organization}</span>
-                    </span>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    ID: {el.id.slice(0, 8)}...
-                  </span>
-                  <Link
-                    to={`/elections/${el.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                  >
-                    <span>Manage Workspace</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Visual Separator */}
-      <div className="border-t border-slate-200/80 dark:border-slate-800" />
-
-      {/* ========================================================= */}
-      {/* CONTEXT 2: MY VOTING ACTIVITY (VOTER SECTION)             */}
-      {/* ========================================================= */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-              <Vote className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                <span>My Voting Activity</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
-                  Elections where you can participate
-                </span>
-              </h2>
-            </div>
-          </div>
-
+        {activeTab === 'voter' ? (
           <Link
             to="/available-elections"
-            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 pb-3"
           >
-            <span>View all available ({voterCounts.eligible})</span>
+            <span>View all ({voterElections.length})</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
-        </div>
-
-        {/* Voter KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-mono">Eligible To Vote</span>
-            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{voterCounts.eligible}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider font-mono">Active & Ready</span>
-            <div className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{voterCounts.activeNow}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider font-mono">Upcoming</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white mt-1">{voterCounts.upcoming}</div>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider font-mono">Ballots Cast</span>
-            <div className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">{voterCounts.voted}</div>
-          </div>
-        </div>
-
-        {/* Eligible Voter Elections List */}
-        {eligibleVoterList.length === 0 ? (
-          <div className="p-8 text-center rounded-3xl bg-white dark:bg-[#0d1527] border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
-              <Vote className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">No eligible elections assigned</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-              Your email (<span className="font-mono text-slate-700 dark:text-slate-300">{user?.email}</span>) is not yet listed on any published election roster. When an election creator adds you to an eligible voter roster, it will appear here immediately.
-            </p>
-            <Link
-              to="/available-elections"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <span>Browse All Published Contests</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {eligibleVoterList.slice(0, 3).map((el) => {
-              const isLive = ['active', 'live'].includes((el.status || '').toLowerCase());
-              const hasVoted = Boolean(el.already_voted || el.has_voted);
-              const isVerified = el.verification_status === 'verified';
+          <Link
+            to="/elections"
+            className="text-xs font-semibold text-stone-700 dark:text-stone-300 hover:underline flex items-center gap-1 pb-3"
+          >
+            <span>Manage workspace</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </div>
 
-              return (
-                <div
-                  key={el.id}
-                  className="p-5 rounded-2xl bg-white dark:bg-[#0d1527] border border-emerald-500/20 dark:border-emerald-950/50 shadow-sm flex flex-col justify-between space-y-4 hover:border-emerald-500/40 transition-all"
+      {/* ========================================================= */}
+      {/* TAB 1: AVAILABLE TO VOTE                                  */}
+      {/* ========================================================= */}
+      {activeTab === 'voter' && (
+        <section className="space-y-4">
+          {voterElections.length === 0 ? (
+            <div className="p-8 text-center rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-[#1a4231]/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                <Vote className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif text-base font-bold text-stone-900 dark:text-white">
+                No active voting rosters
+              </h3>
+              <p className="text-xs text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+                Your registered email is not currently listed on any active election rosters. When an institution uploads an authorized roster including your email, your ballot will appear here.
+              </p>
+              <div className="pt-2">
+                <Link
+                  to="/available-elections"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-stone-300 dark:border-[#262a33] text-xs font-semibold hover:bg-stone-50 dark:hover:bg-[#101216]"
                 >
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <StatusBadge status={el.status} />
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Eligible
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
-                        {el.title}
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
-                        {el.description || 'Review candidates and submit vote.'}
-                      </p>
-                    </div>
-                    {el.organization && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 font-medium">
-                        <Building2 className="w-3 h-3 text-slate-400" />
-                        <span>{el.organization}</span>
-                      </span>
-                    )}
-                  </div>
+                  <span>Browse all published contests</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {voterElections.map((el) => {
+                const isLive = ['active', 'live'].includes((el.status || '').toLowerCase());
+                const isScheduled = (el.status || '').toLowerCase() === 'scheduled';
+                const isCompleted = (el.status || '').toLowerCase() === 'completed';
+                const hasVoted = Boolean(el.already_voted || el.has_voted);
+                const isEligible = el.is_eligible !== false;
 
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                    <div>
-                      {hasVoted ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          Ballot Cast
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          {isLive ? 'Voting Active' : 'Pending Start'}
-                        </span>
+                return (
+                  <div
+                    key={el.id}
+                    className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs flex flex-col justify-between space-y-4 hover:border-emerald-600/40 dark:hover:border-emerald-500/40 transition-all"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <StatusBadge status={el.status} />
+                        {isEligible && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-[#1a4231]/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Eligible
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <Link
+                          to={`/election/${el.id}`}
+                          className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 hover:text-emerald-700 dark:hover:text-emerald-400 block line-clamp-1"
+                        >
+                          {el.title}
+                        </Link>
+                        <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2 mt-1 leading-relaxed">
+                          {el.description || 'Institutional contest. Verify candidate positions before casting ballot.'}
+                        </p>
+                      </div>
+
+                      {el.organization && (
+                        <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>{el.organization}</span>
+                        </div>
                       )}
                     </div>
 
-                    {!hasVoted ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/elections/${el.id}/participate`)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                          isLive
-                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
-                        }`}
-                      >
-                        <span>{isLive ? 'Vote Now' : 'Verify'}</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    ) : (
+                    <div className="pt-3 border-t border-stone-100 dark:border-[#262a33] flex items-center justify-between text-xs">
+                      <div>
+                        {hasVoted ? (
+                          <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
+                            Ballot cast
+                          </span>
+                        ) : isCompleted ? (
+                          <span className="text-stone-500">Concluded</span>
+                        ) : (
+                          <span className="text-stone-500 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                            <span>{formatDate(el.start_datetime)}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        {hasVoted ? (
+                          <Link
+                            to="/voting-history"
+                            className="text-xs font-semibold text-stone-600 dark:text-stone-400 hover:underline"
+                          >
+                            Receipt
+                          </Link>
+                        ) : isCompleted ? (
+                          <Link
+                            to={`/elections/${el.id}/results`}
+                            className="text-xs font-semibold text-stone-800 dark:text-stone-200 hover:underline"
+                          >
+                            Results
+                          </Link>
+                        ) : isLive && isEligible ? (
+                          <Link
+                            to={`/election/${el.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1a4231] hover:bg-[#1f4f3b] text-white transition-colors"
+                          >
+                            <span>Enter election</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        ) : (
+                          <Link
+                            to={`/election/${el.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-stone-300 dark:border-[#262a33] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#101216]"
+                          >
+                            <span>Details</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 2: CREATED BY YOU                                     */}
+      {/* ========================================================= */}
+      {activeTab === 'creator' && (
+        <section className="space-y-4">
+          {createdElections.length === 0 ? (
+            <div className="p-8 text-center rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-stone-100 dark:bg-[#101216] text-stone-600 dark:text-stone-400 flex items-center justify-center mx-auto">
+                <PlusCircle className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif text-base font-bold text-stone-900 dark:text-white">
+                No elections created yet
+              </h3>
+              <p className="text-xs text-stone-600 dark:text-stone-400 max-w-sm mx-auto leading-relaxed">
+                You haven't set up any election workspaces under this account yet. Define a charter, upload authorized voter rosters, and start your contest.
+              </p>
+              <div className="pt-2">
+                <Link
+                  to="/elections/create"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#101216] hover:bg-[#171a20] dark:bg-[#1a4231] dark:hover:bg-[#1f4f3b] text-white text-xs font-semibold transition-colors"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Create your first election</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {createdElections.map((el) => (
+                <div
+                  key={el.id}
+                  className="p-5 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs flex flex-col justify-between space-y-4 hover:border-stone-400 dark:hover:border-stone-600 transition-all"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <StatusBadge status={el.status} />
+                      <span className="text-[10px] text-stone-400 font-mono capitalize">
+                        {el.election_type || 'Standard'}
+                      </span>
+                    </div>
+
+                    <div>
                       <Link
-                        to={`/results?electionId=${el.id}`}
-                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        to={`/elections/${el.id}`}
+                        className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 hover:text-emerald-700 dark:hover:text-emerald-400 block line-clamp-1"
                       >
-                        View Results
+                        {el.title || el.name}
                       </Link>
+                      <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2 mt-1 leading-relaxed">
+                        {el.description || 'No description provided.'}
+                      </p>
+                    </div>
+
+                    {el.organization && (
+                      <div className="flex items-center gap-1.5 text-xs text-stone-500">
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>{el.organization}</span>
+                      </div>
                     )}
                   </div>
+
+                  <div className="pt-3 border-t border-stone-100 dark:border-[#262a33] flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-stone-400 font-mono">
+                      ID: {el.id.slice(0, 8)}...
+                    </span>
+                    <Link
+                      to={`/elections/${el.id}`}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 hover:bg-stone-200 dark:bg-[#101216] dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 transition-colors"
+                    >
+                      <span>Manage</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Trust & Integrity Guarantee Footer Banner */}
+      <div className="p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] flex items-center justify-between text-xs text-stone-600 dark:text-stone-400">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span>All cast ballots are decoupled from voter identities to guarantee vote confidentiality.</span>
+        </div>
+        <Link to="/security" className="text-emerald-700 dark:text-emerald-400 hover:underline font-semibold text-[11px] hidden sm:inline">
+          View Security Standards
+        </Link>
+      </div>
+
     </div>
   );
 }

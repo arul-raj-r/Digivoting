@@ -1,9 +1,6 @@
-email
-rahul.sharma@citizen.gov
-priya.patel@citizen.gov
-amitabh.singh@citizen.gov
-kavita.deshmukh@citizen.gov
-rajesh.nair@citizen.gov
-sita.raman@citizen.gov
-mohan.das@citizen.gov
-sunita.verma@citizen.gov
+student_id,full_name,email,mobile
+STU-2026-001,Aarav Sharma,aarav.sharma@institution.edu,+919876543210
+STU-2026-002,Priya Patel,priya.patel@institution.edu,+919876543211
+STU-2026-003,Rohan Mehta,rohan.mehta@institution.edu,+919876543212
+STU-2026-004,Sneha Rao,sneha.rao@institution.edu,+919876543213
+STU-2026-005,Vikram Singh,vikram.singh@institution.edu,+919876543214

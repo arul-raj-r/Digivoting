@@ -53,18 +53,43 @@ class RegisterView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         validated = serializer.validated_data
-        email = validated['email']
-        mobile_number = validated['mobile_number']
-        full_name = validated['full_name']
+        email = validated['email'].strip().lower()
+        mobile_number = validated['mobile_number'].strip().replace(" ", "").replace("-", "")
+        full_name = validated['full_name'].strip()
         password = validated['password']
 
         # 1. Check duplicate email (case-insensitive) -> 409 Conflict
-        if User.objects.filter(email__iexact=email).exists():
-            return Response({
-                "success": False,
-                "field": "email",
-                "message": "This email is already registered — try logging in instead."
-            }, status=status.HTTP_409_CONFLICT)
+        existing_user = User.objects.filter(email__iexact=email).first()
+        if existing_user:
+            is_verified = bool(existing_user.email_verified or existing_user.account_status == 'ACTIVE')
+            if is_verified:
+                if not existing_user.email_verified or existing_user.account_status != 'ACTIVE':
+                    existing_user.email_verified = True
+                    if existing_user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                        existing_user.account_status = 'ACTIVE'
+                    existing_user.save(update_fields=['email_verified', 'account_status'])
+                return Response({
+                    "success": False,
+                    "code": "ACCOUNT_EXISTS_VERIFIED",
+                    "field": "email",
+                    "message": "This email is already registered and verified. Please log in instead.",
+                    "action": "LOGIN"
+                }, status=status.HTTP_409_CONFLICT)
+            else:
+                # Existing unverified user: do not create duplicate account, allow/recommend verification
+                # Resend fresh verification OTP/token
+                from accounts.utils import generate_and_send_verification_email
+                token_data = generate_and_send_verification_email(existing_user, request)
+                logger.info("Dispatched fresh verification code for existing unverified user: %s", email)
+                return Response({
+                    "success": False,
+                    "code": "ACCOUNT_EXISTS_UNVERIFIED",
+                    "field": "email",
+                    "message": "This email is already registered but not verified yet. A fresh verification code has been sent to your email.",
+                    "action": "VERIFY_EMAIL",
+                    "email": existing_user.email,
+                    "resend_available": True
+                }, status=status.HTTP_409_CONFLICT)
 
         # 2. Check duplicate mobile number -> 409 Conflict
         # Check both User and UserProfile / phone fields
@@ -260,7 +285,7 @@ class LoginView(APIView):
                 "errors": errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        email = serializer.validated_data['email']
+        email = serializer.validated_data['email'].strip().lower()
         password = serializer.validated_data['password']
         remember_device = serializer.validated_data.get('remember_device', False)
         
@@ -362,7 +387,8 @@ class LoginView(APIView):
 
         # 4. PASSWORD CORRECT: Check Account Status
         # Check if email is unverified
-        if user.account_status == 'PENDING_EMAIL_VERIFICATION' or not user.email_verified:
+        is_verified = bool(user.email_verified or user.account_status == 'ACTIVE')
+        if not is_verified:
             LoginAttempt.objects.create(
                 user=user,
                 email_attempted=email,
@@ -374,10 +400,19 @@ class LoginView(APIView):
             return Response({
                 "success": False,
                 "code": "EMAIL_VERIFICATION_REQUIRED",
-                "message": "Please verify your email address before logging in.",
+                "error_code": "EMAIL_NOT_VERIFIED",
+                "detail": "Your email is not verified yet.",
+                "message": "Your email is not verified yet. Please verify your email before logging in.",
                 "resend_available": True,
                 "email": user.email
             }, status=status.HTTP_403_FORBIDDEN)
+
+        # Self-heal flags if fields are out of sync
+        if not user.email_verified or user.account_status == 'PENDING_EMAIL_VERIFICATION':
+            user.email_verified = True
+            if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                user.account_status = 'ACTIVE'
+            user.save(update_fields=['email_verified', 'account_status'])
 
         # Check if suspended / locked / deactivated
         if user.account_status in ['SUSPENDED', 'LOCKED', 'DEACTIVATED']:
@@ -493,24 +528,61 @@ class GoogleAuthView(APIView):
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
         # Server-side verification with Google public keys
-        google_client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
+        google_client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '').strip()
+        id_info = None
+        verification_error = None
+
+        # 1. Primary verification: verify signature & claims with clock skew tolerance
         try:
             id_info = google_id_token.verify_oauth2_token(
                 raw_id_token,
                 google_requests.Request(),
-                audience=google_client_id if google_client_id else None
+                audience=google_client_id if google_client_id else None,
+                clock_skew_in_seconds=120
             )
         except Exception as e:
-            logger.warning("Google ID token verification failed: %s", str(e))
+            verification_error = e
+            logger.warning("Primary Google ID token verification failed: %s. Attempting tokeninfo fallback...", str(e))
+            print(f"[GOOGLE AUTH] Primary verification failed ({e}). Checking tokeninfo fallback...")
+
+            # 2. Fallback: Google's official server-side tokeninfo endpoint
+            # Resolves local clock skew, certificate cache staleness, or container TLS handshake issues
+            try:
+                import urllib.request
+                import json
+                tokeninfo_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={raw_id_token}"
+                req = urllib.request.Request(tokeninfo_url, headers={'User-Agent': 'DigiVote-Auth/1.0'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        token_aud = data.get('aud')
+                        if google_client_id and token_aud != google_client_id:
+                            raise ValueError(f"Token audience mismatch: expected {google_client_id}, got {token_aud}")
+                        id_info = data
+                        logger.info("Google ID token verified successfully via tokeninfo fallback.")
+                        print("[GOOGLE AUTH] Token verified successfully via tokeninfo fallback.")
+            except Exception as fallback_err:
+                logger.warning("Google tokeninfo fallback verification failed: %s", str(fallback_err))
+                print(f"[GOOGLE AUTH] Fallback verification failed: {fallback_err}")
+
+        if not id_info:
+            err_msg = str(verification_error) if verification_error else "Token invalid or expired"
+            logger.warning("Google ID token verification failed: %s", err_msg)
+            print(f"[GOOGLE AUTH ERROR] All verification attempts failed: {err_msg}")
+            user_message = "Google authentication failed. The token is invalid or expired."
+            if getattr(settings, 'DEBUG', False):
+                user_message = f"Google authentication failed: {err_msg}"
             return Response({
                 "success": False,
-                "message": "Google authentication failed. The token is invalid or expired."
+                "message": user_message,
+                "detail": err_msg if getattr(settings, 'DEBUG', False) else None
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         google_sub = id_info.get('sub')
         google_email = id_info.get('email', '').strip().lower()
         google_name = id_info.get('name', '') or id_info.get('given_name', '') or google_email.split('@')[0]
-        email_verified_by_google = id_info.get('email_verified', False)
+        email_verified_val = id_info.get('email_verified', False)
+        email_verified_by_google = email_verified_val is True or str(email_verified_val).lower() == 'true'
 
         if not google_email or not google_sub:
             return Response({
@@ -655,88 +727,216 @@ class VerifyEmailView(APIView):
     """
     POST /api/auth/verify-email/
     Module 4: Email Verification Endpoint.
-    - Accepts raw 64-char token.
-    - Computes SHA-256 hash and queries EmailVerificationToken.
-    - Validates token exists, is not already used, and is not expired.
-    - On success: marks token used, updates user.email_verified=True, user.account_status='ACTIVE'.
-    - Returns distinct error messages for expired, already used, or invalid tokens.
+    - Accepts 64-char URL token OR { email, otp_code }.
+    - On OTP code: verifies against OTPVerification (purpose='EMAIL_VERIFICATION').
+    - On link token: verifies against EmailVerificationToken.
+    - On success: marks record used, updates authoritative fields:
+      user.email_verified = True
+      user.account_status = 'ACTIVE'
+    - Invalidates both link token and OTP records for this user upon success.
     """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         import hashlib
+        import hmac
+        from django.contrib.auth.hashers import check_password
         from django.utils import timezone
-        from authentication.models import EmailVerificationToken
+        from authentication.models import EmailVerificationToken, OTPVerification
         from accounts.serializers import VerifyEmailSerializer
 
         serializer = VerifyEmailSerializer(data=request.data)
         if not serializer.is_valid():
+            errors = serializer.errors
+            first_field = next(iter(errors))
+            raw_msg = errors[first_field]
+            msg = raw_msg[0] if isinstance(raw_msg, list) else str(raw_msg)
             return Response({
                 "success": False,
                 "code": "INVALID_TOKEN",
-                "message": "A valid verification token is required."
+                "message": msg,
+                "errors": errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        raw_token = serializer.validated_data['token'].strip()
-        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        raw_token = serializer.validated_data.get('token', '').strip()
+        raw_email = serializer.validated_data.get('email', '').strip().lower()
+        raw_otp = serializer.validated_data.get('otp_code', '').strip()
 
-        # Query token record by hash
-        token_record = EmailVerificationToken.objects.filter(token_hash=token_hash).select_related('user').first()
+        # CASE A: OTP Verification via Email + 6-digit Code
+        if raw_email and raw_otp:
+            user = User.objects.filter(email__iexact=raw_email).first()
+            if not user:
+                return Response({
+                    "success": False,
+                    "code": "USER_NOT_FOUND",
+                    "message": "No account found with this email address."
+                }, status=status.HTTP_404_NOT_FOUND)
 
-        if not token_record:
-            return Response({
-                "success": False,
-                "code": "INVALID_TOKEN",
-                "message": "Invalid verification link. Please check your email or request a new activation link."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        user = token_record.user
-
-        if token_record.used:
-            if user.email_verified and user.account_status == 'ACTIVE':
+            is_verified = bool(user.email_verified or user.account_status == 'ACTIVE')
+            if is_verified:
+                if not user.email_verified or user.account_status != 'ACTIVE':
+                    user.email_verified = True
+                    if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                        user.account_status = 'ACTIVE'
+                    user.save(update_fields=['email_verified', 'account_status'])
                 return Response({
                     "success": True,
                     "code": "ALREADY_VERIFIED",
-                    "message": "Your email address is already verified. You may proceed to log in."
+                    "message": "Your email address is already verified. You may proceed to log in.",
+                    "email_verified": True
                 }, status=status.HTTP_200_OK)
+
+            otp_record = OTPVerification.objects.filter(
+                user=user,
+                purpose='EMAIL_VERIFICATION',
+                used=False
+            ).order_by('-created_at').first()
+
+            if not otp_record:
+                return Response({
+                    "success": False,
+                    "code": "NO_ACTIVE_OTP",
+                    "message": "No active verification code found for this email. Please request a new code."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if otp_record.expires_at < timezone.now():
+                return Response({
+                    "success": False,
+                    "code": "OTP_EXPIRED",
+                    "message": "The verification code has expired. Please request a new code."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if otp_record.attempt_count >= otp_record.max_attempts:
+                otp_record.used = True
+                otp_record.save(update_fields=['used'])
+                return Response({
+                    "success": False,
+                    "code": "MAX_ATTEMPTS_EXCEEDED",
+                    "message": "Too many failed attempts. Please request a new verification code."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Constant-time verify against hash (SHA-256 or PBKDF2 check_password)
+            submitted_hash = hashlib.sha256(raw_otp.encode()).hexdigest()
+            is_match = (
+                hmac.compare_digest(otp_record.code_hash, submitted_hash) or
+                check_password(raw_otp, otp_record.code_hash)
+            )
+
+            if not is_match:
+                otp_record.attempt_count += 1
+                otp_record.save(update_fields=['attempt_count'])
+                remaining = max(0, otp_record.max_attempts - otp_record.attempt_count)
+                return Response({
+                    "success": False,
+                    "code": "INVALID_OTP",
+                    "message": f"Invalid verification code. {remaining} attempt(s) remaining.",
+                    "attempts_remaining": remaining
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Valid OTP -> Update database atomically
+            with transaction.atomic():
+                otp_record.used = True
+                otp_record.save(update_fields=['used'])
+
+                # Invalidate all unused tokens and OTPs for this user
+                EmailVerificationToken.objects.filter(user=user, used=False).update(used=True)
+                OTPVerification.objects.filter(user=user, purpose='EMAIL_VERIFICATION', used=False).update(used=True)
+
+                user.email_verified = True
+                if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                    user.account_status = 'ACTIVE'
+                user.save(update_fields=['email_verified', 'account_status'])
+
+            logger.info("Email verified successfully via OTP for user: %s", user.email)
+
             return Response({
-                "success": False,
-                "code": "ALREADY_USED",
-                "message": "This verification link has already been used. Please request a new one if your account is not active."
-            }, status=status.HTTP_400_BAD_REQUEST)
+                "success": True,
+                "code": "EMAIL_VERIFIED",
+                "message": "Email address verified successfully. Your citizen account is now active. You may proceed to log in.",
+                "email": user.email,
+                "email_verified": True
+            }, status=status.HTTP_200_OK)
 
-        # Check expiration
-        if token_record.expires_at < timezone.now():
+        # CASE B: Link Token Verification
+        if raw_token:
+            token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+            token_record = EmailVerificationToken.objects.filter(token_hash=token_hash).select_related('user').first()
+
+            if not token_record:
+                return Response({
+                    "success": False,
+                    "code": "INVALID_TOKEN",
+                    "message": "Invalid verification link. Please check your email or request a new activation link."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user = token_record.user
+
+            if token_record.used:
+                is_verified = bool(user.email_verified or user.account_status == 'ACTIVE')
+                if is_verified:
+                    if not user.email_verified or user.account_status != 'ACTIVE':
+                        user.email_verified = True
+                        if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                            user.account_status = 'ACTIVE'
+                        user.save(update_fields=['email_verified', 'account_status'])
+                    return Response({
+                        "success": True,
+                        "code": "ALREADY_VERIFIED",
+                        "message": "Your email address is already verified. You may proceed to log in.",
+                        "email_verified": True
+                    }, status=status.HTTP_200_OK)
+                return Response({
+                    "success": False,
+                    "code": "ALREADY_USED",
+                    "message": "This verification link has already been used. Please request a new one if your account is not active."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check expiration
+            if token_record.expires_at < timezone.now():
+                return Response({
+                    "success": False,
+                    "code": "TOKEN_EXPIRED",
+                    "message": "This verification link has expired (valid for 24 hours). Please request a new link below."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Activate user account atomically
+            with transaction.atomic():
+                token_record.used = True
+                token_record.save(update_fields=['used'])
+
+                # Invalidate active email OTPs as well
+                OTPVerification.objects.filter(user=user, purpose='EMAIL_VERIFICATION', used=False).update(used=True)
+
+                user.email_verified = True
+                if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                    user.account_status = 'ACTIVE'
+                user.save(update_fields=['email_verified', 'account_status'])
+
+            logger.info("Email verified successfully via token link for user: %s", user.email)
+
             return Response({
-                "success": False,
-                "code": "TOKEN_EXPIRED",
-                "message": "This verification link has expired (valid for 24 hours). Please request a new link below."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Activate user account
-        with transaction.atomic():
-            token_record.used = True
-            token_record.save(update_fields=['used'])
-
-            user.email_verified = True
-            if user.account_status == 'PENDING_EMAIL_VERIFICATION':
-                user.account_status = 'ACTIVE'
-            user.save(update_fields=['email_verified', 'account_status'])
+                "success": True,
+                "code": "EMAIL_VERIFIED",
+                "message": "Email address verified successfully. Your citizen account is now active. You may proceed to log in.",
+                "email": user.email,
+                "email_verified": True
+            }, status=status.HTTP_200_OK)
 
         return Response({
-            "success": True,
-            "message": "Email address verified successfully. Your citizen account is now active."
-        }, status=status.HTTP_200_OK)
+            "success": False,
+            "code": "INVALID_REQUEST",
+            "message": "Please provide a valid verification link token or email with verification code."
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ResendVerificationView(APIView):
     """
     POST /api/auth/resend-verification/
-    Module 4: Resend Verification Email Endpoint.
+    Module 4: Resend Verification Email/OTP Endpoint.
     - Accepts email.
     - Enforces 60-second cooldown server-side per email.
     - Timing-safe: non-existent emails execute equivalent dummy hash work to prevent user enumeration.
-    - Invalidates prior tokens and dispatches new 24h verification link.
+    - Invalidates prior tokens and dispatches fresh verification OTP and link.
     """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ResendVerificationThrottle]
@@ -754,12 +954,11 @@ class ResendVerificationView(APIView):
                 "message": "Please provide a valid email address."
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        email = serializer.validated_data['email']
+        email = serializer.validated_data['email'].strip().lower()
         cooldown_key = f"resend_email_cooldown_{email}"
 
         # 1. Enforce 60-second cooldown
         if cache.get(cooldown_key):
-            remaining = 60 # Cooldown active
             return Response({
                 "success": False,
                 "code": "COOLDOWN_ACTIVE",
@@ -774,13 +973,20 @@ class ResendVerificationView(APIView):
             check_password("dummy_password", DUMMY_PASSWORD_HASH)
             return Response({
                 "success": True,
-                "message": "If an account with this email exists, a fresh verification link has been sent."
+                "message": "If an account with this email exists, a fresh verification code has been sent."
             }, status=status.HTTP_200_OK)
 
         # If already verified
-        if user.email_verified and user.account_status == 'ACTIVE':
+        is_verified = bool(user.email_verified or user.account_status == 'ACTIVE')
+        if is_verified:
+            if not user.email_verified or user.account_status != 'ACTIVE':
+                user.email_verified = True
+                if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                    user.account_status = 'ACTIVE'
+                user.save(update_fields=['email_verified', 'account_status'])
             return Response({
                 "success": True,
+                "code": "ALREADY_VERIFIED",
                 "message": "This email address is already verified. You may proceed to log in."
             }, status=status.HTTP_200_OK)
 
@@ -790,7 +996,10 @@ class ResendVerificationView(APIView):
 
         return Response({
             "success": True,
-            "message": "If an account with this email exists, a fresh verification link has been sent."
+            "message": "If an account with this email exists, a fresh verification code has been sent.",
+            "email": user.email,
+            "expires_in_seconds": 300,
+            "cooldown_seconds": 60
         }, status=status.HTTP_200_OK)
 
 
@@ -932,6 +1141,14 @@ class VerifyOTPView(APIView):
         from authentication.models import OTPCode, LoginAttempt
         from accounts.serializers import VerifyOTPSerializer
 
+        # Seamless routing: if email and otp_code/otp are provided without pre_auth_token,
+        # delegate to email verification handler so verify-otp works across all callers.
+        raw_email = (request.data.get('email') or request.data.get('username') or '').strip()
+        has_otp = bool(request.data.get('otp_code') or request.data.get('otp'))
+        has_pre_auth = bool(request.data.get('pre_auth_token') or request.data.get('challenge_id'))
+        if raw_email and has_otp and not has_pre_auth:
+            return VerifyEmailView().post(request)
+
         serializer = VerifyOTPSerializer(data=request.data)
         if not serializer.is_valid():
             errors = serializer.errors
@@ -1037,6 +1254,17 @@ class VerifyOTPView(APIView):
             # Invalidate pre-auth token (enforce single-use)
             cache.set(f"consumed_pre_auth_{token_jti}", True, timeout=300)
 
+            # Ensure authoritative verification fields are set
+            user_updated = False
+            if not user.email_verified:
+                user.email_verified = True
+                user_updated = True
+            if user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                user.account_status = 'ACTIVE'
+                user_updated = True
+            if user_updated:
+                user.save(update_fields=['email_verified', 'account_status'])
+
             # Issue SimpleJWT full session tokens
             refresh = RefreshToken.for_user(user)
             refresh_jti = refresh['jti']
@@ -1127,11 +1355,15 @@ class VerifyOTPView(APIView):
 class ResendOTPView(APIView):
     """
     POST /api/auth/otp/resend/
-    Module 5: Resend fresh 6-digit OTP code using pre-auth token.
+    Module 5: Resend fresh 6-digit OTP code using pre-auth token or email.
     """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        raw_email = (request.data.get('email') or request.data.get('username') or '').strip()
+        has_pre_auth = bool(request.data.get('pre_auth_token') or request.data.get('challenge_id'))
+        if raw_email and not has_pre_auth:
+            return ResendVerificationView().post(request)
         # Delegates to SendOTPView logic
         return SendOTPView().post(request)
 

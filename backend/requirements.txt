@@ -19,3 +19,6 @@ argon2-cffi>=23.1.0
 django-storages>=1.14.2
 boto3>=1.34.0
 opencv-python-headless
+google-genai>=1.0.0
+pinecone>=7.0.0
+pypdf>=5.0.0

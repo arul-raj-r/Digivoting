@@ -1,6 +1,7 @@
 import secrets
 import hashlib
 from datetime import timedelta
+from django.db import models
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password, check_password
 from django.conf import settings
@@ -12,6 +13,7 @@ from authentication.models import OTPVerification
 from authentication.services.email_service import EmailService
 from elections.models import Election, EligibleVoter
 from elections.audit import log_election_action
+from elections.permissions import synchronize_election_lifecycle
 from voting.models import VotingAuthorization
 from voting.face_service import verify_voter_face
 
@@ -26,11 +28,14 @@ class VoterElectionsListView(APIView):
 
     def get(self, request):
         user = request.user
-        rolls = EligibleVoter.objects.filter(email__iexact=user.email).select_related('election', 'election__verification_config', 'election__rules')
+        rolls = EligibleVoter.objects.filter(
+            models.Q(email__iexact=user.email) | models.Q(user=user)
+        ).select_related('election', 'election__verification_config', 'election__rules')
 
         results = []
         for roll in rolls:
             election = roll.election
+            synchronize_election_lifecycle(election)
             v_config = getattr(election, 'verification_config', None)
             rules = getattr(election, 'rules', None)
 
@@ -68,7 +73,11 @@ class VoterElectionsListView(APIView):
                 )
             })
 
-        return Response({"elections": results}, status=status.HTTP_200_OK)
+        return Response({
+            "elections": results,
+            "results": results,
+            "count": len(results)
+        }, status=status.HTTP_200_OK)
 
 
 class VoterElectionEligibilityView(APIView):
@@ -84,6 +93,8 @@ class VoterElectionEligibilityView(APIView):
             election = Election.objects.get(pk=election_id)
         except (Election.DoesNotExist, ValueError):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        synchronize_election_lifecycle(election)
 
         user = request.user
         roll = EligibleVoter.objects.filter(election=election, email__iexact=user.email).first()
@@ -113,8 +124,8 @@ class VoterElectionEligibilityView(APIView):
                 "election_status": election.status
             }, status=status.HTTP_409_CONFLICT)
 
-        # Retrieve verification requirements
-        v_config, _ = election.verification_config, getattr(election, 'verification_config', None)
+        # Retrieve verification requirements safely
+        v_config = getattr(election, 'verification_config', None)
         require_otp = v_config.require_email_otp if v_config else False
         require_face = v_config.require_webcam_verification if v_config else False
 
@@ -165,7 +176,7 @@ class VoterElectionEligibilityView(APIView):
     def post(self, request, election_id):
         """
         POST /api/voter/elections/<election_id>/eligibility/
-        Matches voter-submitted details (email, student_id) against the election's
+        Matches voter-submitted details against the election's
         creator-uploaded eligible voter roster.
         Returns MATCH_FOUND, NO_MATCH, or MISMATCH.
         """
@@ -174,7 +185,13 @@ class VoterElectionEligibilityView(APIView):
         except (Election.DoesNotExist, ValueError):
             return Response({"error": "Election not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        submitted_email = str(request.data.get('email', '')).strip().lower() or (request.user.email.lower() if request.user.is_authenticated else '')
+        synchronize_election_lifecycle(election)
+
+        # Strictly enforce authenticated user's email if logged in to prevent IDOR / account hijack
+        if request.user.is_authenticated:
+            submitted_email = request.user.email.strip().lower()
+        else:
+            submitted_email = str(request.data.get('email', '')).strip().lower()
         submitted_student_id = str(request.data.get('student_id', '')).strip()
 
         # Find eligible voter record for this election
@@ -205,8 +222,8 @@ class VoterElectionEligibilityView(APIView):
                     "election_status": election.status
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Link user if not linked
-        if not roll.user and request.user.is_authenticated:
+        # Link user if not linked and emails strictly match
+        if not roll.user and request.user.is_authenticated and roll.email.lower() == request.user.email.lower():
             roll.user = request.user
             roll.save(update_fields=['user'])
 

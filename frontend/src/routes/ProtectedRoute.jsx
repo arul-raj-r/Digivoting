@@ -11,12 +11,12 @@ export function ProtectedRoute({ children, allowedRoles }) {
     return <Loader message="Verifying authentication session..." fullPage />;
   }
 
-  if (!isAuthenticated && !import.meta.env.DEV) {
+  if (!isAuthenticated) {
     // Save current location to redirect after login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && !import.meta.env.DEV && !allowedRoles.includes(user?.role)) {
+  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
     return <Navigate to="/403" replace />;
   }
 

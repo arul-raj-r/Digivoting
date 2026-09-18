@@ -46,6 +46,7 @@ urlpatterns = [
     # Direct System & Contact Endpoints
     path('api/system/config/', SystemConfigView.as_view(), name='system_config'),
     path('api/contact/', ContactSubmissionView.as_view(), name='contact_submission'),
+    path('api/ai/', include('ai_assistant.urls')),
 
     # Direct Auth Root for standard spec
     path('api/auth/', include('accounts.urls')),

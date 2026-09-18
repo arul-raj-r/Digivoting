@@ -1,169 +1,265 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../layouts/PublicLayout';
 import { 
   UserPlus, 
-  MailCheck, 
   LogIn, 
-  Key, 
-  ShieldCheck, 
+  Vote, 
+  Search, 
   FileCheck2, 
   UserCheck, 
-  Camera, 
   Ticket, 
-  Vote, 
   Send, 
+  CheckCircle2, 
   BarChart2, 
-  ArrowDown, 
   ArrowRight,
-  Shield
+  Shield,
+  PlusCircle,
+  Users,
+  Upload,
+  ShieldCheck,
+  Calendar,
+  Sliders,
+  Award
 } from 'lucide-react';
 
 export default function HowItWorks() {
-  const steps = [
+  const [activeTab, setActiveTab] = useState('voter'); // 'voter' | 'creator'
+
+  const voterSteps = [
     {
       num: 1,
-      title: 'Register Profile',
-      category: 'Registration',
-      icon: UserPlus,
-      desc: 'Citizen signs up with full name, institutional email, phone number, and a secure password.',
-      tag: 'Identity Entry'
+      title: 'Sign In to DigiVote',
+      icon: LogIn,
+      tag: 'Authentication',
+      desc: 'Authenticate securely using your registered institutional credentials or Google OAuth with multi-factor OTP protection.'
     },
     {
       num: 2,
-      title: 'Email Verification',
-      category: 'Registration',
-      icon: MailCheck,
-      desc: 'Verification token is dispatched to ensure the institutional email address is authentic and owned by the citizen.',
-      tag: 'Domain Validation'
+      title: 'Browse Available Elections',
+      icon: Vote,
+      tag: 'Discovery',
+      desc: 'View contests published by your organization. The system checks server-side voter rolls to indicate your eligibility status.'
     },
     {
       num: 3,
-      title: 'Credential Login',
-      category: 'Authentication',
-      icon: LogIn,
-      desc: 'Citizen inputs credentials or signs in through Google OAuth. Account lockout rules protect against brute-force attempts.',
-      tag: 'Secure Handshake'
+      title: 'Select Contest',
+      icon: Search,
+      tag: 'Contest Selection',
+      desc: 'Review the contest schedule, instructions, positions, and nominated candidate manifestos.'
     },
     {
       num: 4,
-      title: 'OTP Authentication',
-      category: 'Authentication',
-      icon: Key,
-      desc: 'A time-limited 6-digit MFA OTP is generated, hashed with SHA-256, and validated with strict attempt counters.',
-      tag: 'Multi-Factor'
+      title: 'Roster Eligibility Check',
+      icon: FileCheck2,
+      tag: 'Eligibility Gate',
+      desc: 'The platform confirms your enrollment on the creator-uploaded voter roster and ensures no ballot was previously cast.'
     },
     {
       num: 5,
-      title: 'Secure Session',
-      category: 'Authentication',
-      icon: ShieldCheck,
-      desc: 'JWT access and refresh tokens are issued. Device session is registered for real-time auditability and revocation.',
-      tag: 'Session Protection'
+      title: 'Identity Verification',
+      icon: UserCheck,
+      tag: 'Verification',
+      desc: 'Complete required verification challenges configured for the contest: email OTP challenge and real-time webcam face matching.'
     },
     {
       num: 6,
-      title: 'Election Eligibility',
-      category: 'Verification',
-      icon: FileCheck2,
-      desc: 'System cross-references citizen identity against the pre-configured election voter roll and confirms voter has not voted.',
-      tag: 'Roster Check'
+      title: 'One-Time Voting Authorization',
+      icon: Ticket,
+      tag: 'Authorization Token',
+      desc: 'Upon verification success, the server issues a cryptographically signed, single-use 15-minute authorization token.'
     },
     {
       num: 7,
-      title: 'Voter Verification Initiation',
-      category: 'Verification',
-      icon: UserCheck,
-      desc: 'Citizen initiates verification challenge required by election rules (Email OTP challenge and facial biometrics).',
-      tag: 'Challenge Active'
+      title: 'Enter Polling Booth',
+      icon: Vote,
+      tag: 'Private Polling',
+      desc: 'Access a distraction-free, confidential voting booth with equal, neutral visual presentation for all nominated candidates.'
     },
     {
       num: 8,
-      title: 'Webcam / Face Verification',
-      category: 'Verification',
-      icon: Camera,
-      desc: 'Citizen captures a live camera frame. OpenCV / ArcFace compares face embeddings against the authorized profile.',
-      tag: 'Biometric Match'
+      title: 'Review Ballot Selection',
+      icon: ShieldCheck,
+      tag: 'Confirmation',
+      desc: 'Verify your chosen candidate on an explicit confirmation screen emphasizing the finality and confidentiality of your ballot.'
     },
     {
       num: 9,
-      title: 'Voting Authorization',
-      category: 'Verification',
-      icon: Ticket,
-      desc: 'Upon successful biometric and OTP challenges, a single-use cryptographically bound authorization token is issued.',
-      tag: 'Token Issued'
+      title: 'Cast & Decouple Ballot',
+      icon: Send,
+      tag: 'Secret Ballot',
+      desc: 'Your ballot choice is committed to an isolated tally table with minute-truncated timestamps, completely decoupled from your voter identity.'
     },
     {
       num: 10,
-      title: 'Voting Booth Entry',
-      category: 'Voting',
-      icon: Vote,
-      desc: 'Citizen enters the confidential polling booth. Candidate manifestos and choices are rendered in a private interface.',
-      tag: 'Private Polling'
-    },
-    {
-      num: 11,
-      title: 'Vote Submission',
-      category: 'Voting',
-      icon: Send,
-      desc: 'Ballot is encrypted with per-election key. Timestamp is truncated to the minute and voter link is deliberately detached.',
-      tag: 'Secret Ballot'
-    },
-    {
-      num: 12,
-      title: 'Certified Results',
-      category: 'Results',
-      icon: BarChart2,
-      desc: 'Once the election concludes, tallies are computed from encrypted ballots and published with cryptographic integrity proof.',
-      tag: 'Published Tally'
+      title: 'Receive Official Vote Confirmation',
+      icon: CheckCircle2,
+      tag: 'Participation Receipt',
+      desc: 'Receive an official backend confirmation with receipt ID and timestamp. You can print or copy your participation reference.'
     }
   ];
+
+  const creatorSteps = [
+    {
+      num: 1,
+      title: 'Sign In with Unified Account',
+      icon: LogIn,
+      tag: 'Authentication',
+      desc: 'Log in with your institutional DigiVote account. There is no separate login; permissions and ownership are validated server-side.'
+    },
+    {
+      num: 2,
+      title: 'Open My Elections Hub',
+      icon: Sliders,
+      tag: 'Management Hub',
+      desc: 'Access your organizer dashboard showing draft, scheduled, live, paused, and completed elections you manage.'
+    },
+    {
+      num: 3,
+      title: 'Launch Election Wizard',
+      icon: PlusCircle,
+      tag: 'Creation',
+      desc: 'Initiate a structured 6-step election creation workflow with automatic step validation and draft saving.'
+    },
+    {
+      num: 4,
+      title: 'Configure Contest Details',
+      icon: FileCheck2,
+      tag: 'Details',
+      desc: 'Set election title, detailed description, host organization, election type, and position category.'
+    },
+    {
+      num: 5,
+      title: 'Nominate Candidates',
+      icon: Users,
+      tag: 'Candidate Slate',
+      desc: 'Add candidates with legal names, party or committee affiliations, photographs, and complete manifesto statements.'
+    },
+    {
+      num: 6,
+      title: 'Upload Eligible Voters (CSV)',
+      icon: Upload,
+      tag: 'Roster Upload',
+      desc: 'Upload a CSV roster with format: student_id, full_name, email, mobile. The system runs backend dry-run validation.'
+    },
+    {
+      num: 7,
+      title: 'Configure Verification Rules',
+      icon: ShieldCheck,
+      tag: 'Security Rules',
+      desc: 'Select mandatory security checks for voters: Email OTP challenges and webcam facial embedding verification.'
+    },
+    {
+      num: 8,
+      title: 'Set Contest Schedule',
+      icon: Calendar,
+      tag: 'Scheduling',
+      desc: 'Define exact voting commencement and conclusion timestamps with automated duration calculation.'
+    },
+    {
+      num: 9,
+      title: 'Review & Publish',
+      icon: CheckCircle2,
+      tag: 'Publication',
+      desc: 'Audit the contest summary. Once published, configuration locks prevent retroactive tampering with rules or slates.'
+    },
+    {
+      num: 10,
+      title: 'Manage Election Lifecycle & QR',
+      icon: Award,
+      tag: 'Control Center',
+      desc: 'Download instant QR codes for voter access, monitor live turnout, manage pause/resume, and publish certified results.'
+    }
+  ];
+
+  const currentSteps = activeTab === 'voter' ? voterSteps : creatorSteps;
 
   return (
     <PublicLayout>
       {/* Header Banner */}
-      <section className="py-16 lg:py-24 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#070b14]/50">
+      <section className="py-16 lg:py-24 border-b border-sage-200 dark:border-graphite-800 bg-ivory/50 dark:bg-graphite-950/60">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-forest-50 dark:bg-forest-950/50 border border-forest-600/20 text-forest-700 dark:text-forest-400 text-xs font-semibold">
             <Shield className="w-4 h-4" />
-            <span>End-to-End Election Lifecycle</span>
+            <span>Civic Voting Architecture</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-serif font-black text-graphite-900 dark:text-ivory tracking-tight">
             How DigiVote Works
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Follow the complete, step-by-step verification and voting journey from citizen registration to certified results publishing.
+          <p className="text-sm sm:text-base text-graphite-600 dark:text-sage-400 max-w-2xl mx-auto leading-relaxed">
+            A clear, transparent guide to digital balloting — whether you are an eligible voter casting a confidential ballot or an organizer managing an institutional election.
           </p>
+
+          {/* Interactive Role Flow Switcher */}
+          <div className="pt-6 flex justify-center">
+            <div className="inline-flex p-1 rounded-2xl bg-sage-200/80 dark:bg-graphite-900 border border-sage-300 dark:border-graphite-700">
+              <button
+                type="button"
+                onClick={() => setActiveTab('voter')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'voter'
+                    ? 'bg-forest-600 text-white shadow-sm'
+                    : 'text-graphite-600 dark:text-sage-300 hover:text-graphite-900 dark:hover:text-white'
+                }`}
+              >
+                <Vote className="w-3.5 h-3.5" />
+                <span>Voter Experience Flow</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('creator')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'creator'
+                    ? 'bg-forest-600 text-white shadow-sm'
+                    : 'text-graphite-600 dark:text-sage-300 hover:text-graphite-900 dark:hover:text-white'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Election Creator Flow</span>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Visual Timeline Workflow */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative border-l-2 border-indigo-200 dark:border-indigo-900/60 ml-4 sm:ml-8 space-y-10 pl-6 sm:pl-10">
-            {steps.map((item, index) => {
+          
+          <div className="text-center pb-12 space-y-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-forest-700 dark:text-forest-400">
+              {activeTab === 'voter' ? 'Voter Participation Journey' : 'Election Organizer Lifecycle'}
+            </span>
+            <h2 className="text-2xl font-serif font-bold text-graphite-900 dark:text-ivory">
+              {activeTab === 'voter' ? 'From Eligibility to Official Receipt' : 'From Creation to Certified Results'}
+            </h2>
+          </div>
+
+          <div className="relative border-l-2 border-forest-600/30 dark:border-forest-800/40 ml-4 sm:ml-8 space-y-10 pl-6 sm:pl-10">
+            {currentSteps.map((item, index) => {
               const Icon = item.icon;
               return (
                 <div key={index} className="relative group">
                   {/* Timeline bullet / badge */}
-                  <div className="absolute -left-[35px] sm:-left-[51px] top-1.5 w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-[#0d1527] border-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-mono font-bold text-xs shadow-md shadow-indigo-600/10 group-hover:scale-110 transition-transform">
+                  <div className="absolute -left-[35px] sm:-left-[51px] top-1.5 w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-graphite-900 border-2 border-forest-600 text-forest-700 dark:text-forest-400 flex items-center justify-center font-mono font-bold text-xs shadow-sm group-hover:scale-105 transition-transform">
                     {item.num}
                   </div>
 
                   {/* Step Card */}
-                  <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 depth-card transition-all">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm hover:border-forest-600/30 dark:hover:border-forest-600/30 transition-all space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        <Icon className="w-4 h-4 text-forest-700 dark:text-forest-400" />
+                        <h3 className="text-base font-bold text-graphite-900 dark:text-ivory">
                           {item.title}
                         </h3>
                       </div>
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 w-fit">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-forest-50 dark:bg-forest-950/50 text-forest-700 dark:text-forest-300 border border-forest-600/20 w-fit">
                         {item.tag}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    <p className="text-xs text-graphite-600 dark:text-sage-400 leading-relaxed">
                       {item.desc}
                     </p>
                   </div>
@@ -175,27 +271,27 @@ export default function HowItWorks() {
       </section>
 
       {/* Bottom CTA */}
-      <section className="py-16 bg-slate-50 dark:bg-[#070b14] border-t border-slate-200/80 dark:border-slate-800/80 text-center">
+      <section className="py-16 bg-sage-50/50 dark:bg-graphite-950 border-t border-sage-200 dark:border-graphite-800 text-center">
         <div className="max-w-2xl mx-auto px-4 space-y-4">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-            Experience the workflow in action
+          <h2 className="text-2xl font-serif font-bold text-graphite-900 dark:text-ivory">
+            Ready to participate or launch an election?
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Create an account or view security principles to understand the underlying cryptographic architecture.
+          <p className="text-xs sm:text-sm text-graphite-600 dark:text-sage-400">
+            Create an account or sign in to experience the institutional voting workflow.
           </p>
           <div className="pt-2 flex items-center justify-center gap-3">
             <Link
               to="/register"
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/25"
+              className="inline-flex items-center gap-2 bg-forest-600 hover:bg-forest-700 text-white px-6 py-3 rounded-xl text-xs font-semibold shadow-sm transition-all"
             >
-              <span>Create an Account</span>
+              <span>Get Started</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
             <Link
               to="/security"
-              className="inline-flex items-center gap-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-xl text-xs font-semibold"
+              className="inline-flex items-center gap-2 border border-sage-300 dark:border-graphite-700 hover:bg-sage-100 dark:hover:bg-graphite-800 text-graphite-700 dark:text-sage-200 px-6 py-3 rounded-xl text-xs font-semibold transition-all"
             >
-              <span>Security Details</span>
+              <span>Security Architecture</span>
             </Link>
           </div>
         </div>

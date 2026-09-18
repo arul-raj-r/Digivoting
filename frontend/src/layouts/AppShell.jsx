@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from '../components/shared/Header';
 import Sidebar from '../components/shared/Sidebar';
+import DigiVoteHelpWidget from '../components/ai/DigiVoteHelpWidget';
 
 export default function AppShell({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -14,7 +15,7 @@ export default function AppShell({ children }) {
   }, [isCollapsed]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#070b14] text-slate-900 dark:text-slate-100 flex flex-col transition-colors">
+    <div className="min-h-screen bg-[#f7f5f0] dark:bg-[#101216] text-stone-900 dark:text-stone-100 flex flex-col transition-colors font-sans">
       {/* Top Navigation Header */}
       <Header 
         mobileMenuOpen={mobileMenuOpen} 
@@ -35,6 +36,9 @@ export default function AppShell({ children }) {
           {children || <Outlet />}
         </main>
       </div>
+
+      {/* Subtle Floating DigiVote Help Widget */}
+      <DigiVoteHelpWidget />
     </div>
   );
 }

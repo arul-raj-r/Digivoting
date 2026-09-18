@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { verificationApi } from '../../services/verificationApi';
-import api from '../../services/api';
+import api from '../../api/api';
 import StatusBadge from '../../components/common/StatusBadge';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
 import ErrorState from '../../components/common/ErrorState';
@@ -25,8 +25,8 @@ import {
   Shield, 
   Check, 
   X,
-  Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Search
 } from 'lucide-react';
 
 export default function VoterParticipationFlow() {
@@ -116,7 +116,7 @@ export default function VoterParticipationFlow() {
     setFaceSuccess(false);
     setVotingAuth(null);
     stopCamera();
-    navigate(`/elections/${electionId}/vote`);
+    navigate(`/elections/${electionId}/participate`, { replace: true });
   };
 
   // STEP 1: Run Server-Side Eligibility Match
@@ -264,6 +264,10 @@ export default function VoterParticipationFlow() {
         expires_at: res.expires_at,
         valid_minutes: res.valid_minutes || 15
       });
+      // Store single-use authorization token for the Voting Booth
+      if (res.authorization_token) {
+        sessionStorage.setItem(`digivote_auth_${selectedElectionId}`, res.authorization_token);
+      }
     } catch (err) {
       setAuthError(err.response?.data?.error || 'Could not grant voting authorization.');
     } finally {
@@ -285,17 +289,17 @@ export default function VoterParticipationFlow() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
       {/* Top Banner */}
-      <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+      <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-forest-50 dark:bg-forest-950/60 text-forest-700 dark:text-forest-400 flex items-center justify-center border border-forest-600/20">
             <Vote className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Voting Booth & Verification Portal
+            <h1 className="text-2xl font-serif font-black text-graphite-900 dark:text-ivory tracking-tight">
+              Voting Verification & Access Gate
             </h1>
-            <p className="text-xs text-slate-500">
-              Only elections for which you are on the creator's eligible voter roster are available.
+            <p className="text-xs text-graphite-500 dark:text-sage-400">
+              Only contests for which you are enrolled on the official roster are eligible for participation.
             </p>
           </div>
         </div>
@@ -303,25 +307,25 @@ export default function VoterParticipationFlow() {
 
       {/* Available Elections Selector */}
       {availableElections.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 space-y-3">
-          <Vote className="w-10 h-10 mx-auto text-slate-400" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+        <div className="p-12 text-center rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 space-y-3">
+          <Vote className="w-10 h-10 mx-auto text-graphite-400 dark:text-sage-400" />
+          <h3 className="text-sm font-bold text-graphite-900 dark:text-ivory">
             No elections currently available for your account
           </h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
+          <p className="text-xs text-graphite-500 dark:text-sage-400 max-w-md mx-auto">
             You are not currently listed on any active or scheduled election rosters. If you believe this is an error, please contact your election organizer.
           </p>
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Election Picker Dropdown/Cards */}
-          <div className="p-4 rounded-xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Election Picker Dropdown */}
+          <div className="p-4 rounded-xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-2 flex-1">
-              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Select Election:</span>
+              <span className="text-xs font-semibold text-graphite-500 dark:text-sage-400 whitespace-nowrap">Select Election:</span>
               <select
                 value={selectedElectionId}
                 onChange={(e) => handleSelectElection(e.target.value)}
-                className="w-full sm:max-w-md px-3 py-2 text-xs font-bold rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                className="w-full sm:max-w-md px-3 py-2 text-xs font-bold rounded-xl bg-sage-50/60 dark:bg-graphite-950 border border-sage-200 dark:border-graphite-800 text-graphite-900 dark:text-ivory"
               >
                 {availableElections.map((el) => (
                   <option key={el.id} value={el.id}>
@@ -335,7 +339,7 @@ export default function VoterParticipationFlow() {
               <div className="flex items-center gap-2">
                 <StatusBadge status={selectedElectionMeta.status} />
                 {selectedElectionMeta.has_voted && (
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                     Voted
                   </span>
                 )}
@@ -346,10 +350,10 @@ export default function VoterParticipationFlow() {
           {/* =========================================================
               STEP 1: ELIGIBILITY CHECK
               ========================================================= */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                <UserCheck className="w-4 h-4 text-indigo-600" />
+          <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-sage-100 dark:border-graphite-800 pb-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-graphite-900 dark:text-ivory">
+                <UserCheck className="w-4 h-4 text-forest-700 dark:text-forest-400" />
                 <span>Step 1: Check Election Eligibility</span>
               </div>
               {eligibilityResult?.eligible && (
@@ -362,13 +366,13 @@ export default function VoterParticipationFlow() {
 
             {!eligibilityResult?.eligible ? (
               <form onSubmit={handleCheckEligibility} className="space-y-4 max-w-md">
-                <p className="text-xs text-slate-500">
-                  Verify your eligibility to participate in this election against the election creator's uploaded roster.
+                <p className="text-xs text-graphite-500 dark:text-sage-400">
+                  Verify your eligibility to participate in this election against the organizer's uploaded roster.
                 </p>
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    <label className="block text-[11px] font-semibold text-graphite-700 dark:text-sage-300 mb-1">
                       Registered Email Address *
                     </label>
                     <input
@@ -377,12 +381,12 @@ export default function VoterParticipationFlow() {
                       value={voterInput.email}
                       onChange={(e) => setVoterInput({ ...voterInput, email: e.target.value })}
                       placeholder="e.g. voter@institution.edu"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-[#090e1a] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-sage-50/60 dark:bg-graphite-950 border border-sage-200 dark:border-graphite-800 text-graphite-900 dark:text-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    <label className="block text-[11px] font-semibold text-graphite-700 dark:text-sage-300 mb-1">
                       Student ID / Voter ID (If required by roster)
                     </label>
                     <input
@@ -390,7 +394,7 @@ export default function VoterParticipationFlow() {
                       value={voterInput.student_id}
                       onChange={(e) => setVoterInput({ ...voterInput, student_id: e.target.value })}
                       placeholder="e.g. 24UCS019"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-[#090e1a] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-sage-50/60 dark:bg-graphite-950 border border-sage-200 dark:border-graphite-800 text-graphite-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -405,7 +409,7 @@ export default function VoterParticipationFlow() {
                 <button
                   type="submit"
                   disabled={isCheckingEligibility}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
                 >
                   <Search className="w-3.5 h-3.5" />
                   <span>{isCheckingEligibility ? 'Verifying with Roster...' : 'Verify My Eligibility'}</span>
@@ -429,10 +433,10 @@ export default function VoterParticipationFlow() {
               STEP 2: EMAIL OTP VERIFICATION (IF REQUIRED)
               ========================================================= */}
           {eligibilityResult?.eligible && eligibilityResult.verification_config?.require_email_otp && (
-            <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                  <Mail className="w-4 h-4 text-indigo-600" />
+            <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-sage-100 dark:border-graphite-800 pb-3">
+                <div className="flex items-center gap-2 font-bold text-sm text-graphite-900 dark:text-ivory">
+                  <Mail className="w-4 h-4 text-forest-700 dark:text-forest-400" />
                   <span>Step 2: Email OTP Challenge</span>
                 </div>
                 {otpSuccess && (
@@ -445,7 +449,7 @@ export default function VoterParticipationFlow() {
 
               {!otpSuccess ? (
                 <div className="space-y-4 max-w-md">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-graphite-500 dark:text-sage-400">
                     A 6-digit one-time passcode will be dispatched to your registered roster email.
                   </p>
 
@@ -454,18 +458,18 @@ export default function VoterParticipationFlow() {
                       type="button"
                       onClick={handleRequestOtp}
                       disabled={otpSending || otpCooldown > 0}
-                      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 text-xs font-semibold disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-sage-100 dark:bg-graphite-800 hover:bg-sage-200 dark:hover:bg-graphite-700 text-graphite-800 dark:text-sage-200 text-xs font-semibold disabled:opacity-50"
                     >
                       {otpSending ? 'Sending...' : otpCooldown > 0 ? `Resend code in ${otpCooldown}s` : 'Request OTP Code'}
                     </button>
                     {otpCooldown > 0 && (
-                      <span className="text-[11px] text-slate-400">Code sent to {eligibilityResult.voter?.email}</span>
+                      <span className="text-[11px] text-graphite-400">Code sent to {eligibilityResult.voter?.email}</span>
                     )}
                   </div>
 
                   <form onSubmit={handleVerifyOtp} className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      <label className="block text-[11px] font-semibold text-graphite-700 dark:text-sage-300 mb-1">
                         Enter 6-Digit OTP
                       </label>
                       <input
@@ -474,7 +478,7 @@ export default function VoterParticipationFlow() {
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                         placeholder="••••••"
-                        className="w-40 tracking-widest text-center text-base font-mono font-bold px-3 py-2 rounded-xl bg-white dark:bg-[#090e1a] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                        className="w-40 tracking-widest text-center text-base font-mono font-bold px-3 py-2 rounded-xl bg-sage-50/60 dark:bg-graphite-950 border border-sage-200 dark:border-graphite-800 text-graphite-900 dark:text-white"
                       />
                     </div>
 
@@ -488,7 +492,7 @@ export default function VoterParticipationFlow() {
                     <button
                       type="submit"
                       disabled={otpVerifying || otpCode.length !== 6}
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs font-bold disabled:opacity-50 transition-all"
                     >
                       <span>{otpVerifying ? 'Verifying...' : 'Verify OTP'}</span>
                     </button>
@@ -507,10 +511,10 @@ export default function VoterParticipationFlow() {
               STEP 3: WEBCAM FACE VERIFICATION (IF REQUIRED)
               ========================================================= */}
           {eligibilityResult?.eligible && eligibilityResult.verification_config?.require_webcam_verification && (
-            <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                  <Camera className="w-4 h-4 text-emerald-600" />
+            <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-sage-100 dark:border-graphite-800 pb-3">
+                <div className="flex items-center gap-2 font-bold text-sm text-graphite-900 dark:text-ivory">
+                  <Camera className="w-4 h-4 text-forest-700 dark:text-forest-400" />
                   <span>Step 3: Live Webcam Face Verification</span>
                 </div>
                 {faceSuccess && (
@@ -523,7 +527,7 @@ export default function VoterParticipationFlow() {
 
               {!faceSuccess ? (
                 <div className="space-y-4 max-w-md">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-graphite-500 dark:text-sage-400">
                     Perform a live webcam face check to confirm voter presence against institutional biometric standards.
                   </p>
 
@@ -531,16 +535,16 @@ export default function VoterParticipationFlow() {
                     <button
                       type="button"
                       onClick={startCamera}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/25 hover:bg-indigo-700"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-forest-600 text-white text-xs font-bold shadow-sm hover:bg-forest-700 transition-all"
                     >
                       <Camera className="w-4 h-4" />
                       <span>Start Camera</span>
                     </button>
                   ) : (
                     <div className="space-y-3">
-                      <div className="relative rounded-2xl overflow-hidden bg-black aspect-video max-w-sm border border-slate-300 dark:border-slate-700">
+                      <div className="relative rounded-2xl overflow-hidden bg-black aspect-video max-w-sm border border-sage-300 dark:border-graphite-700">
                         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 border-2 border-dashed border-indigo-400/60 pointer-events-none m-4 rounded-xl" />
+                        <div className="absolute inset-0 border-2 border-dashed border-forest-400/60 pointer-events-none m-4 rounded-xl" />
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -548,7 +552,7 @@ export default function VoterParticipationFlow() {
                           type="button"
                           onClick={captureAndVerifyFace}
                           disabled={faceVerifying}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-forest-600 text-white text-xs font-bold shadow-sm hover:bg-forest-700 disabled:opacity-50"
                         >
                           <Check className="w-4 h-4" />
                           <span>{faceVerifying ? 'Matching Face...' : 'Capture & Verify'}</span>
@@ -556,7 +560,7 @@ export default function VoterParticipationFlow() {
                         <button
                           type="button"
                           onClick={stopCamera}
-                          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600"
+                          className="px-3 py-2 rounded-xl border border-sage-200 dark:border-graphite-700 text-xs text-graphite-600 dark:text-sage-400 hover:bg-sage-50"
                         >
                           Cancel
                         </button>
@@ -591,14 +595,14 @@ export default function VoterParticipationFlow() {
               STEP 4: ONE-TIME VOTING AUTHORIZATION & BOUNDARY
               ========================================================= */}
           {eligibilityResult?.eligible && (
-            <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                  <Key className="w-4 h-4 text-indigo-600" />
+            <div className="p-6 rounded-2xl bg-white dark:bg-graphite-900 border border-sage-200 dark:border-graphite-800 shadow-sm space-y-4">
+              <div className="border-b border-sage-100 dark:border-graphite-800 pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-sm text-graphite-900 dark:text-ivory">
+                  <Key className="w-4 h-4 text-forest-700 dark:text-forest-400" />
                   <span>Step 4: One-Time Cryptographic Voting Authorization</span>
                 </div>
                 {votingAuth && (
-                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-forest-50 text-forest-700 dark:bg-forest-950 dark:text-forest-400">
                     AUTHORIZED
                   </span>
                 )}
@@ -606,7 +610,7 @@ export default function VoterParticipationFlow() {
 
               {!votingAuth ? (
                 <div className="space-y-3">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-graphite-500 dark:text-sage-400">
                     Once all required verification steps are satisfied, the server will issue a cryptographically signed, single-use 15-minute voting authorization token.
                   </p>
 
@@ -621,37 +625,38 @@ export default function VoterParticipationFlow() {
                     type="button"
                     onClick={handleRequestAuthorization}
                     disabled={isAuthorizing || (eligibilityResult.verification_config?.require_email_otp && !otpSuccess) || (eligibilityResult.verification_config?.require_webcam_verification && !faceSuccess)}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/25 disabled:opacity-40 transition-all"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs font-bold shadow-sm disabled:opacity-40 transition-all"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Key className="w-4 h-4" />
                     <span>{isAuthorizing ? 'Issuing Authorization...' : 'Issue One-Time Voting Authorization'}</span>
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                      <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                  <div className="p-5 rounded-2xl bg-forest-50/60 dark:bg-forest-950/40 border border-forest-200 dark:border-forest-800/60 space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-forest-900 dark:text-forest-200">
+                      <ShieldCheck className="w-5 h-5 text-forest-700 dark:text-forest-400" />
                       <span>Single-Use Voting Authorization Active</span>
                     </div>
-                    <p className="text-xs text-indigo-800 dark:text-indigo-300">
-                      Your identity and eligibility have been cryptographically authenticated by the DigiVote server.
+                    <p className="text-xs text-forest-800 dark:text-forest-300">
+                      Your identity and eligibility have been verified for this contest. You are authorized to proceed to the polling booth.
                     </p>
-                    <div className="text-[11px] font-mono text-slate-500 flex flex-wrap gap-4 pt-1">
+                    <div className="text-[11px] font-mono text-graphite-500 dark:text-sage-400 flex flex-wrap gap-4 pt-1">
                       <div>Status: <span className="text-emerald-600 font-bold">READY TO VOTE</span></div>
                       <div>Token Expiry: <span className="font-bold">{new Date(votingAuth.expires_at).toLocaleTimeString()}</span></div>
                     </div>
                   </div>
 
-                  {/* Phase Boundary Notice */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Phase 1 Verification Boundary Complete</span>
-                    </div>
-                    <p className="text-[11px] leading-relaxed">
-                      All prerequisites (Roster Eligibility, Email OTP, and Face Recognition) are verified. Final candidate selection, zero-knowledge ballot encryption, and tally computation will be unlocked in the upcoming Voting Module.
-                    </p>
+                  {/* Immediate Action: Enter Polling Booth */}
+                  <div className="pt-2">
+                    <Link
+                      to={`/elections/${selectedElectionId}/vote`}
+                      className="inline-flex items-center justify-center gap-2 w-full py-3.5 px-6 rounded-xl bg-forest-600 hover:bg-forest-700 text-white text-xs font-bold shadow-sm transition-all hover:scale-[1.01]"
+                    >
+                      <Vote className="w-4 h-4" />
+                      <span>Proceed to Polling Booth & Cast Confidential Ballot</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
                   </div>
                 </div>
               )}

@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/common/StatusBadge';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
 import ErrorState from '../../components/common/ErrorState';
+import ConfirmationDialog from '../../components/common/ConfirmationDialog';
+import Modal from '../../components/common/Modal';
 import { 
   Vote, 
   ArrowLeft, 
@@ -36,8 +38,18 @@ import {
   X,
   Eye,
   Shield,
-  BarChart3
+  BarChart3,
+  ArrowRight,
+  Award,
+  CheckCircle2,
+  Info,
+  HelpCircle,
+  KeyRound,
+  QrCode,
+  Download,
+  Copy
 } from 'lucide-react';
+import QRCode from 'qrcode';
 
 export default function ElectionControlCenter() {
   const { id } = useParams();
@@ -51,6 +63,13 @@ export default function ElectionControlCenter() {
   const [verificationConfig, setVerificationConfig] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Voter status for this election
+  const [voterStatus, setVoterStatus] = useState({
+    isEligible: false,
+    hasVoted: false,
+    verificationStatus: null,
+  });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -72,51 +91,113 @@ export default function ElectionControlCenter() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // QR Code and Share State
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  useEffect(() => {
+    if (election?.id) {
+      const entryUrl = `${window.location.origin}/election/${election.id}`;
+      QRCode.toDataURL(entryUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#101216', light: '#ffffff' }
+      })
+        .then(setQrCodeDataUrl)
+        .catch(console.error);
+    }
+  }, [election?.id]);
+
+  // Manifesto modal for candidate view
+  const [selectedManifestoCandidate, setSelectedManifestoCandidate] = useState(null);
+
+  // Confirmation Modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'warning',
+  });
+
+  const closeConfirmModal = () => {
+    setConfirmModal((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
+  };
+
   const fetchElectionData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [elData, cands, votersData, vConfig, logs] = await Promise.all([
+      // Parallel fetch election metadata, candidates, verification rules
+      const [elData, cands, vConfig, voterOverview] = await Promise.all([
         electionsApi.getElection(id),
         electionsApi.getCandidates(id).catch(() => []),
-        electionsApi.getEligibleVoters(id).catch(() => ({ count: 0, results: [] })),
         electionsApi.getVerificationConfig(id).catch(() => null),
-        electionsApi.getAuditLogs ? electionsApi.getAuditLogs(id).catch(() => []) : Promise.resolve([])
+        electionsApi.getVoterOverview().catch(() => [])
       ]);
 
       setElection(elData);
       setCandidates(Array.isArray(cands) ? cands : []);
-      setVoters(Array.isArray(votersData?.results) ? votersData.results : []);
-      setVoterCount(votersData?.count ?? (Array.isArray(votersData?.results) ? votersData.results.length : 0));
       setVerificationConfig(vConfig);
-      setAuditLogs(Array.isArray(logs?.results) ? logs.results : Array.isArray(logs) ? logs : []);
+
+      // Verify if current creator/user is on the eligible voter roster
+      const overviewList = Array.isArray(voterOverview) ? voterOverview : (voterOverview?.results || voterOverview?.elections || []);
+      const matched = overviewList.find((e) => String(e.id) === String(id));
+      setVoterStatus({
+        isEligible: Boolean(elData?.is_eligible ?? matched?.is_eligible),
+        hasVoted: Boolean(elData?.already_voted ?? (matched?.already_voted || matched?.has_voted)),
+        verificationStatus: elData?.verification_status || matched?.verification_status || null,
+      });
+
+      // Check if user is creator or staff before fetching administrative voter lists
+      const isOwnerCheck = Boolean(
+        user && (
+          elData.created_by === user.id ||
+          elData.created_by_email === user.email ||
+          user.is_staff ||
+          user.role === 'ADMIN'
+        )
+      );
+
+      if (isOwnerCheck) {
+        const [votersData, logs] = await Promise.all([
+          electionsApi.getEligibleVoters(id).catch(() => ({ count: 0, results: [] })),
+          electionsApi.getAuditLogs ? electionsApi.getAuditLogs(id).catch(() => []) : Promise.resolve([])
+        ]);
+        setVoters(Array.isArray(votersData?.results) ? votersData.results : []);
+        setVoterCount(votersData?.count ?? (Array.isArray(votersData?.results) ? votersData.results.length : 0));
+        setAuditLogs(Array.isArray(logs?.results) ? logs.results : Array.isArray(logs) ? logs : []);
+      }
     } catch (err) {
       console.error('Failed to load election workspace:', err);
-      setError(err.message || 'Could not load election control workspace.');
+      setError(err.message || 'Could not load election details.');
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     fetchElectionData();
   }, [fetchElectionData]);
 
-  // Lifecycle action controls
-  const handleLifecycleAction = async (actionType) => {
+  // Lifecycle action controls with confirmation
+  const executeLifecycleAction = async (actionType) => {
+    closeConfirmModal();
     setIsActionLoading(true);
     setActionMessage('');
     setError(null);
     try {
       if (actionType === 'start') {
         await electionsApi.startElection(id);
-        setActionMessage('Election has started and is now LIVE.');
+        setActionMessage('Election has successfully started and is now LIVE.');
       } else if (actionType === 'pause') {
         await electionsApi.pauseElection(id);
-        setActionMessage('Election has been PAUSED.');
+        setActionMessage('Election voting has been PAUSED.');
       } else if (actionType === 'resume') {
         await electionsApi.resumeElection(id);
-        setActionMessage('Election has RESUMED and is active.');
+        setActionMessage('Election has RESUMED and voting is active.');
       } else if (actionType === 'complete') {
         await electionsApi.completeElection(id);
         setActionMessage('Election has been marked COMPLETED.');
@@ -131,6 +212,33 @@ export default function ElectionControlCenter() {
     } finally {
       setIsActionLoading(false);
     }
+  };
+
+  const promptLifecycleAction = (actionType) => {
+    const titles = {
+      start: 'Launch Election Now',
+      pause: 'Pause Election Voting',
+      resume: 'Resume Election Voting',
+      complete: 'Conclude Election',
+      configure: 'Mark Election Configured',
+    };
+
+    const messages = {
+      start: 'Are you sure you want to launch this election? Once started, voting will begin, eligible voters will be able to cast ballots, and the candidate slate and voter roster will be permanently locked.',
+      pause: 'Are you sure you want to pause voting? Voters will temporarily not be able to cast ballots until resumed.',
+      resume: 'Are you sure you want to resume voting? Eligible voters will once again be able to verify and cast ballots.',
+      complete: 'Are you sure you want to conclude this election? Once concluded, no further votes can be submitted and certified results will be finalized.',
+      configure: 'Mark this election as configured? This verifies candidates and voters are present before scheduling.',
+    };
+
+    setConfirmModal({
+      isOpen: true,
+      title: titles[actionType] || 'Confirm Action',
+      message: messages[actionType] || 'Do you wish to proceed with this operation?',
+      confirmText: actionType === 'start' ? 'Launch Election' : actionType === 'complete' ? 'Conclude' : 'Proceed',
+      type: actionType === 'complete' || actionType === 'pause' ? 'warning' : 'info',
+      onConfirm: () => executeLifecycleAction(actionType),
+    });
   };
 
   // Add Candidate handler
@@ -157,15 +265,27 @@ export default function ElectionControlCenter() {
     }
   };
 
-  // Remove Candidate handler
-  const handleDeleteCandidate = async (candidateId) => {
-    if (!window.confirm('Are you sure you want to remove this candidate?')) return;
-    try {
-      await electionsApi.deleteCandidate(id, candidateId);
-      await fetchElectionData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to remove candidate.');
-    }
+  // Remove Candidate handler with modal
+  const promptDeleteCandidate = (candidateId, candidateName) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remove Candidate',
+      message: `Are you sure you want to remove "${candidateName}" from the official ballot slate? This action cannot be undone.`,
+      confirmText: 'Remove Candidate',
+      type: 'danger',
+      onConfirm: async () => {
+        closeConfirmModal();
+        setIsActionLoading(true);
+        try {
+          await electionsApi.deleteCandidate(id, candidateId);
+          await fetchElectionData();
+        } catch (err) {
+          setError(err.response?.data?.error || 'Failed to remove candidate.');
+        } finally {
+          setIsActionLoading(false);
+        }
+      },
+    });
   };
 
   // CSV file selection & dry run preview
@@ -208,15 +328,24 @@ export default function ElectionControlCenter() {
     }
   };
 
-  // Delete voter handler
-  const handleDeleteVoter = async (voterId) => {
-    if (!window.confirm('Remove this voter from the eligible roster?')) return;
-    try {
-      await electionsApi.deleteEligibleVoter(id, voterId);
-      await fetchElectionData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to remove voter.');
-    }
+  // Delete voter handler with modal
+  const promptDeleteVoter = (voterId, voterIdentifier) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remove Eligible Voter',
+      message: `Are you sure you want to remove ${voterIdentifier} from the official voter roster? They will no longer be eligible to cast a ballot.`,
+      confirmText: 'Remove Voter',
+      type: 'danger',
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          await electionsApi.deleteEligibleVoter(id, voterId);
+          await fetchElectionData();
+        } catch (err) {
+          setError(err.response?.data?.error || 'Failed to remove voter.');
+        }
+      },
+    });
   };
 
   if (isLoading) {
@@ -232,7 +361,7 @@ export default function ElectionControlCenter() {
     return (
       <div className="py-12">
         <ErrorState 
-          title="Election Control Center Unavailable"
+          title="Election Unavailable"
           message={error}
           onRetry={fetchElectionData}
         />
@@ -242,7 +371,14 @@ export default function ElectionControlCenter() {
 
   const status = (election?.status || 'draft').toLowerCase();
   const isLocked = election?.is_locked || ['active', 'live', 'paused', 'completed', 'cancelled'].includes(status);
-  const isOwner = election?.created_by === user?.id || election?.created_by_email === user?.email;
+  const isOwner = Boolean(
+    user && (
+      election?.created_by === user.id ||
+      election?.created_by_email === user.email ||
+      user.is_staff ||
+      user.role === 'ADMIN'
+    )
+  );
 
   const formatDate = (iso) => {
     if (!iso) return 'Not configured';
@@ -273,7 +409,7 @@ export default function ElectionControlCenter() {
     return mobile.length > 4 ? `******${mobile.slice(-4)}` : mobile;
   };
 
-  // Filtered voters list
+  // Filtered voters list for creator
   const filteredVoters = voters.filter((v) => {
     const q = voterSearch.toLowerCase();
     const matchesQ = (v.name || '').toLowerCase().includes(q) || 
@@ -291,12 +427,370 @@ export default function ElectionControlCenter() {
   const verifiedCount = voters.filter(v => ['VERIFIED', 'OTP_VERIFIED', 'FACE_VERIFIED'].includes(v.verification_status)).length;
   const participationRate = voterCount > 0 ? ((votedCount / voterCount) * 100).toFixed(1) : 0;
 
+  // =========================================================================
+  // VIEW A: VOTER-FACING ELECTION DETAILS VIEW (Phase 12)
+  // Displayed when the viewing user is NOT the creator/admin
+  // =========================================================================
+  if (!isOwner) {
+    const isLive = ['active', 'live'].includes(status);
+    const isScheduled = ['scheduled', 'configured'].includes(status);
+    const isCompleted = status === 'completed';
+    const isPaused = status === 'paused';
+
+    return (
+      <div className="space-y-8 pb-20 max-w-5xl mx-auto">
+        {/* Navigation Breadcrumb */}
+        <div>
+          <Link
+            to="/available-elections"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Available Elections</span>
+          </Link>
+        </div>
+
+        {/* Master Header Card */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <StatusBadge status={election.status} />
+              {election.organization && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/40">
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>{election.organization}</span>
+                </span>
+              )}
+              {election.position_category && (
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {election.position_category}
+                </span>
+              )}
+            </div>
+
+            <Link
+              to={`/help?election_id=${election.id}&election_title=${encodeURIComponent(election.title)}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors"
+            >
+              <HelpCircle className="w-4 h-4 text-indigo-500" />
+              <span>Election Guidance</span>
+            </Link>
+          </div>
+
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+              {election.title}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+              {election.description || 'No detailed instructions have been provided by the election organizer.'}
+            </p>
+          </div>
+        </div>
+
+        {/* Voter Participation Status Card */}
+        <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+              YOUR VOTER STATUS
+            </span>
+            <div className="flex items-center gap-2">
+              {voterStatus.hasVoted ? (
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>Ballot Cast & Recorded</span>
+                </div>
+              ) : voterStatus.isEligible ? (
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                  <UserCheck className="w-5 h-5 text-emerald-500" />
+                  <span>Authorized Voter on Official Roster</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                  <Lock className="w-4 h-4 text-slate-400" />
+                  <span>Not on Voter Roster</span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 max-w-xl">
+              {voterStatus.hasVoted
+                ? 'Thank you for participating. Your vote choice has been decoupled and sealed.'
+                : voterStatus.isEligible && isLive
+                ? 'Voting is active right now. Verify your credentials and submit your ballot.'
+                : voterStatus.isEligible && isScheduled
+                ? `This election is scheduled to commence on ${formatDate(election.start_datetime)}. You can complete identity verification in advance.`
+                : voterStatus.isEligible && isCompleted
+                ? 'This election has ended. Official results and tallies are available to view.'
+                : voterStatus.isEligible && isPaused
+                ? 'Voting has been temporarily paused by election organizers.'
+                : 'Your email address is not registered on the eligible voter roster for this contest. Only designated members can cast ballots.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {voterStatus.isEligible && !voterStatus.hasVoted && isLive && (
+              <button
+                type="button"
+                onClick={() => navigate(`/elections/${election.id}/participate`)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all"
+              >
+                <Vote className="w-4 h-4" />
+                <span>Vote in Polling Booth</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {voterStatus.isEligible && !voterStatus.hasVoted && isScheduled && (
+              <button
+                type="button"
+                onClick={() => navigate(`/elections/${election.id}/participate`)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition-all"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span>Verify Identity</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {isCompleted && (
+              <Link
+                to={`/results?electionId=${election.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
+              >
+                <Award className="w-4 h-4" />
+                <span>View Results & Reports</span>
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Schedule & Rules Card */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-600" />
+              <span>Voting Schedule</span>
+            </h3>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <span className="text-slate-500">Commences:</span>
+                <span className="font-bold text-slate-900 dark:text-white font-mono">{formatDate(election.start_datetime)}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <span className="text-slate-500">Concludes:</span>
+                <span className="font-bold text-slate-900 dark:text-white font-mono">{formatDate(election.end_datetime)}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <span className="text-slate-500">Contest Type:</span>
+                <span className="font-bold text-slate-900 dark:text-white capitalize">{election.election_type || 'Standard'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Verification & Security Protocols</span>
+            </h3>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 text-indigo-600" />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">Email OTP Authentication</span>
+                    <span className="text-[11px] text-slate-500">6-digit passcode sent to your registered email</span>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  verificationConfig?.require_email_otp !== false
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                }`}>
+                  {verificationConfig?.require_email_otp !== false ? 'REQUIRED' : 'OPTIONAL'}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">Webcam Liveness Check</span>
+                    <span className="text-[11px] text-slate-500">Facial matching to prevent impersonation</span>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  verificationConfig?.require_webcam_verification
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                }`}>
+                  {verificationConfig?.require_webcam_verification ? 'REQUIRED' : 'NOT REQUIRED'}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">Voting Token Security</span>
+                    <span className="text-[11px] text-slate-500">Single-use 15-minute validity window</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+                  ENFORCED
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Official Candidate Slate (Equal Visual Treatment, Neutrality Enforced) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Official Candidates Slate ({candidates.length})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                All candidates are presented with equal visibility. DigiVote enforces strict neutrality without endorsements or rankings.
+              </p>
+            </div>
+          </div>
+
+          {candidates.length === 0 ? (
+            <div className="p-8 text-center rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 space-y-2">
+              <Users className="w-8 h-8 mx-auto text-slate-400" />
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300">No candidates registered yet</div>
+              <div className="text-[11px] text-slate-500">Candidate slate is currently being assembled by the election organizer.</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {candidates.map((cand) => (
+                <div
+                  key={cand.id}
+                  className="p-5 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-indigo-500/30 transition-all"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      {cand.photo_url || cand.photo ? (
+                        <img
+                          src={cand.photo_url || cand.photo}
+                          alt={cand.full_name}
+                          className="w-14 h-14 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-lg flex items-center justify-center shrink-0 border border-indigo-200/40">
+                          {cand.full_name.charAt(0)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {cand.full_name}
+                        </h4>
+                        {cand.party_or_affiliation && (
+                          <span className="text-xs text-slate-500 truncate block mt-0.5 font-medium">
+                            {cand.party_or_affiliation}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {cand.bio && (
+                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                        {cand.bio}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedManifestoCandidate(cand)}
+                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Read Statement</span>
+                    </button>
+
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Candidate
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Candidate Manifesto Modal */}
+        {selectedManifestoCandidate && (
+          <Modal
+            isOpen={Boolean(selectedManifestoCandidate)}
+            onClose={() => setSelectedManifestoCandidate(null)}
+            title={`Candidate Statement: ${selectedManifestoCandidate.full_name}`}
+            size="md"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                {selectedManifestoCandidate.photo_url || selectedManifestoCandidate.photo ? (
+                  <img
+                    src={selectedManifestoCandidate.photo_url || selectedManifestoCandidate.photo}
+                    alt={selectedManifestoCandidate.full_name}
+                    className="w-16 h-16 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xl flex items-center justify-center">
+                    {selectedManifestoCandidate.full_name.charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {selectedManifestoCandidate.full_name}
+                  </h3>
+                  {selectedManifestoCandidate.party_or_affiliation && (
+                    <p className="text-xs text-slate-500 font-medium">
+                      {selectedManifestoCandidate.party_or_affiliation}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  PLATFORM & BIO STATEMENT
+                </span>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                  {selectedManifestoCandidate.bio || 'No expanded manifesto statement submitted by candidate.'}
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedManifestoCandidate(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW B: CREATOR ELECTION MANAGEMENT WORKSPACE (Phase 22)
+  // Displayed when the viewing user IS the election creator or administrator
+  // =========================================================================
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'candidates', label: `Candidates (${candidates.length})`, icon: Users },
     { id: 'voters', label: `Eligible Voters (${voterCount})`, icon: UserCheck },
     { id: 'verification', label: 'Verification Rules', icon: ShieldCheck },
     { id: 'monitoring', label: 'Live Monitoring', icon: Activity },
+    { id: 'share', label: 'QR & Election Link', icon: QrCode },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
     { id: 'audit', label: 'Audit Trail', icon: Terminal },
   ];
@@ -338,7 +832,7 @@ export default function ElectionControlCenter() {
               </h1>
               <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                 <span>Created by:</span>
-                <span className={isOwner ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-700 dark:text-slate-300 font-medium'}>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">
                   {isOwner ? 'You (Election Owner)' : election.created_by_email || 'Organizer'}
                 </span>
                 <span>•</span>
@@ -360,7 +854,7 @@ export default function ElectionControlCenter() {
             {/* Actions for DRAFT */}
             {status === 'draft' && (
               <button
-                onClick={() => handleLifecycleAction('configure')}
+                onClick={() => promptLifecycleAction('configure')}
                 disabled={isActionLoading}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all"
               >
@@ -372,7 +866,7 @@ export default function ElectionControlCenter() {
             {/* Actions for SCHEDULED / CONFIGURED */}
             {['configured', 'scheduled'].includes(status) && (
               <button
-                onClick={() => handleLifecycleAction('start')}
+                onClick={() => promptLifecycleAction('start')}
                 disabled={isActionLoading}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 transition-all"
               >
@@ -385,7 +879,7 @@ export default function ElectionControlCenter() {
             {['active', 'live'].includes(status) && (
               <>
                 <button
-                  onClick={() => handleLifecycleAction('pause')}
+                  onClick={() => promptLifecycleAction('pause')}
                   disabled={isActionLoading}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/25 transition-all"
                 >
@@ -393,7 +887,7 @@ export default function ElectionControlCenter() {
                   <span>Pause Voting</span>
                 </button>
                 <button
-                  onClick={() => handleLifecycleAction('complete')}
+                  onClick={() => promptLifecycleAction('complete')}
                   disabled={isActionLoading}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-md transition-all"
                 >
@@ -407,7 +901,7 @@ export default function ElectionControlCenter() {
             {status === 'paused' && (
               <>
                 <button
-                  onClick={() => handleLifecycleAction('resume')}
+                  onClick={() => promptLifecycleAction('resume')}
                   disabled={isActionLoading}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 transition-all"
                 >
@@ -415,7 +909,7 @@ export default function ElectionControlCenter() {
                   <span>Resume Voting</span>
                 </button>
                 <button
-                  onClick={() => handleLifecycleAction('complete')}
+                  onClick={() => promptLifecycleAction('complete')}
                   disabled={isActionLoading}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-md transition-all"
                 >
@@ -581,7 +1075,7 @@ export default function ElectionControlCenter() {
                 >
                   {!isLocked && (
                     <button
-                      onClick={() => handleDeleteCandidate(cand.id)}
+                      onClick={() => promptDeleteCandidate(cand.id, cand.full_name)}
                       className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                       title="Remove candidate"
                     >
@@ -658,7 +1152,7 @@ export default function ElectionControlCenter() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1">Manifesto</label>
+                    <label className="block text-[11px] font-semibold mb-1">Manifesto / Platform</label>
                     <textarea
                       rows={3}
                       value={newCandidate.bio}
@@ -788,7 +1282,7 @@ export default function ElectionControlCenter() {
                         {!isLocked && (
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => handleDeleteVoter(v.id)}
+                              onClick={() => promptDeleteVoter(v.id, v.name || v.email)}
                               className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors"
                               title="Remove voter"
                             >
@@ -963,7 +1457,111 @@ export default function ElectionControlCenter() {
       )}
 
       {/* =========================================================
-          TAB 6: SETTINGS
+          TAB: QR & ELECTION LINK
+          ========================================================= */}
+      {activeTab === 'share' && (
+        <div className="space-y-6">
+          <div className="p-6 sm:p-8 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] space-y-6">
+            <div>
+              <h3 className="font-serif text-lg font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
+                <span>Official Election Link & Printable QR Code</span>
+              </h3>
+              <p className="text-xs text-stone-500 mt-1">
+                Distribute this official QR code or link to your authorized voters. Any voter scanning this code will arrive directly at the ballot entry page.
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-8 p-6 rounded-xl bg-stone-50 dark:bg-[#101216] border border-stone-200 dark:border-[#262a33]">
+              {/* QR Image */}
+              <div className="p-4 bg-white rounded-xl border border-stone-200 shadow-xs shrink-0 text-center">
+                {qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeDataUrl}
+                    alt={`QR Code for ${election.title}`}
+                    className="w-56 h-56 mx-auto"
+                  />
+                ) : (
+                  <div className="w-56 h-56 flex items-center justify-center text-xs text-stone-400">
+                    Generating QR code...
+                  </div>
+                )}
+                <span className="text-[10px] font-mono text-stone-500 block mt-2">
+                  Standard camera phone scanner compatible
+                </span>
+              </div>
+
+              {/* Share Controls & Guidance */}
+              <div className="space-y-4 flex-1 w-full">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                    Official Public Ballot URL
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${window.location.origin}/election/${election.id}`}
+                      className="w-full px-3.5 py-2 text-xs font-mono rounded-lg bg-white dark:bg-[#171a20] border border-stone-300 dark:border-[#262a33] text-stone-800 dark:text-stone-200 focus:outline-none select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/election/${election.id}`);
+                        setCopiedLink(true);
+                        setTimeout(() => setCopiedLink(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white dark:bg-[#171a20] hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-300 dark:border-[#262a33] text-xs font-semibold text-stone-800 dark:text-stone-200 transition-colors shrink-0"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!qrCodeDataUrl) return;
+                      const a = document.createElement('a');
+                      a.href = qrCodeDataUrl;
+                      a.download = `election-${election.id.slice(0, 8)}-qr.png`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1a4231] hover:bg-[#1f4f3b] text-white text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download QR Code (PNG)</span>
+                  </button>
+
+                  <Link
+                    to={`/election/${election.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-stone-300 dark:border-[#262a33] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#101216] text-xs font-semibold transition-colors"
+                  >
+                    <span>Preview Voter Entry View</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-emerald-50/60 dark:bg-[#1a4231]/30 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200 space-y-1">
+                  <p className="font-semibold">Voter Access Protocol:</p>
+                  <p className="leading-relaxed">
+                    Voters must authenticate with an institutional email registered on the official voter roster. Unlisted accounts will be prevented from accessing the ballot.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          TAB 7: SETTINGS
           ========================================================= */}
       {activeTab === 'settings' && (
         <div className="space-y-6">
@@ -1022,6 +1620,19 @@ export default function ElectionControlCenter() {
           </div>
         </div>
       )}
+
+      {/* Global Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        type={confirmModal.type}
+        isLoading={isActionLoading}
+      />
     </div>
   );
 }

@@ -152,7 +152,7 @@ export default function VoterConfiguration() {
 
   // Sample CSV Download helper
   const downloadSampleCsv = () => {
-    const csvContent = 'email\njordan.lee@campus.edu\nsam.taylor@campus.edu\ncasey.rivers@campus.edu\nalex.smith@campus.edu';
+    const csvContent = 'student_id,full_name,email,mobile\nSTU-2026-001,Aarav Sharma,aarav.sharma@institution.edu,+919876543210\nSTU-2026-002,Priya Patel,priya.patel@institution.edu,+919876543211\nSTU-2026-003,Rohan Mehta,rohan.mehta@institution.edu,+919876543212\nSTU-2026-004,Sneha Rao,sneha.rao@institution.edu,+919876543213';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -333,18 +333,26 @@ export default function VoterConfiguration() {
             <span>CSV Batch Processing Report</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200">
-              <p className="text-lg font-black">{bulkResult.success_count || 0}</p>
-              <p className="text-[11px] font-medium">Successfully Added</p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+            <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700">
+              <p className="text-base font-black">{bulkResult.total_rows_processed ?? ((bulkResult.valid_count || 0) + (bulkResult.duplicate_count || 0) + (bulkResult.invalid_count || 0))}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Total Rows</p>
             </div>
-            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200">
-              <p className="text-lg font-black">{bulkResult.skipped_count || 0}</p>
-              <p className="text-[11px] font-medium">Skipped Duplicates</p>
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/40">
+              <p className="text-base font-black">{bulkResult.valid_count ?? bulkResult.success_count ?? 0}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Valid Rows</p>
             </div>
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200">
-              <p className="text-lg font-black">{bulkResult.failed_count || 0}</p>
-              <p className="text-[11px] font-medium">Malformed Rows</p>
+            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800/40">
+              <p className="text-base font-black">{bulkResult.duplicate_count ?? bulkResult.skipped_count ?? 0}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Duplicate Rows</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800/40">
+              <p className="text-base font-black">{bulkResult.invalid_count ?? bulkResult.failed_count ?? 0}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">Invalid Rows</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-800/40 col-span-2 sm:col-span-1">
+              <p className="text-base font-black">{bulkResult.imported_count ?? bulkResult.success_count ?? 0}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">Imported Rows</p>
             </div>
           </div>
 

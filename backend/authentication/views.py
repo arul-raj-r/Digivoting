@@ -348,6 +348,12 @@ class OTPVerifyView(APIView):
             otp_record.expires_at = timezone.now() - timedelta(seconds=1)
             otp_record.save()
             
+            # If OTP verification was for email or user was pending verification, mark verified
+            if not user.email_verified or user.account_status == 'PENDING_EMAIL_VERIFICATION':
+                user.email_verified = True
+                user.account_status = 'ACTIVE'
+                user.save(update_fields=['email_verified', 'account_status'])
+            
             # Register active device and session
             user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown Browser')
             ip = get_client_ip(request)
@@ -711,27 +717,47 @@ class GoogleLoginView(APIView):
         if not token_credential:
             return api_error("VALIDATION_ERROR", "Google credential token is required.")
             
+        # Backend-validation against Google APIs
+        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '').strip()
+        id_info = None
+        validation_error = None
+
         try:
-            # Backend-validation against Google APIs
-            client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None)
-            
-            # Simple token decoding assertion verification
             id_info = id_token.verify_oauth2_token(
                 token_credential,
                 google_requests.Request(),
-                client_id
+                client_id if client_id else None,
+                clock_skew_in_seconds=120
             )
-            
-            email = id_info.get('email', '').strip().lower()
-            name = id_info.get('name', '').strip()
-            first_name = id_info.get('given_name', '').strip()
-            last_name = id_info.get('family_name', '').strip()
-            
-            if not email:
-                return api_error("INVALID_GOOGLE_TOKEN", "Google token contains no email.")
-                
-        except ValueError as e:
-            return api_error("INVALID_GOOGLE_TOKEN", f"Google token validation failed: {str(e)}")
+        except Exception as e:
+            validation_error = e
+            logger.warning("Primary Google token verification failed in authentication view: %s. Trying tokeninfo fallback...", str(e))
+            try:
+                import urllib.request
+                import json
+                tokeninfo_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={token_credential}"
+                req = urllib.request.Request(tokeninfo_url, headers={'User-Agent': 'DigiVote-Auth/1.0'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        token_aud = data.get('aud')
+                        if client_id and token_aud != client_id:
+                            raise ValueError(f"Token audience mismatch: expected {client_id}, got {token_aud}")
+                        id_info = data
+            except Exception as fallback_err:
+                logger.warning("Tokeninfo fallback verification also failed: %s", str(fallback_err))
+
+        if not id_info:
+            err_msg = str(validation_error) if validation_error else "Google token validation failed."
+            return api_error("INVALID_GOOGLE_TOKEN", f"Google token validation failed: {err_msg}")
+
+        email = id_info.get('email', '').strip().lower()
+        name = id_info.get('name', '').strip()
+        first_name = id_info.get('given_name', '').strip()
+        last_name = id_info.get('family_name', '').strip()
+
+        if not email:
+            return api_error("INVALID_GOOGLE_TOKEN", "Google token contains no email.")
             
         with transaction.atomic():
             # Check or create account

@@ -17,7 +17,7 @@ export default function HelpSupport() {
   const faqs = [
     {
       q: 'How does DigiVote guarantee that my ballot selection remains secret?',
-      a: 'DigiVote employs a zero-knowledge architectural decoupling protocol. When you submit your vote, the application encrypts your choice and writes it to an isolated ballot table that holds zero foreign keys or relational references to your member account or identity. Once recorded, no election organizer, administrator, or auditor can link your choice back to you.'
+      a: 'DigiVote employs an architectural decoupling protocol. When you submit your vote, the backend records your choice in an isolated ballot table that holds zero foreign keys or relational references to your voter identity. Once recorded, no election organizer, administrator, or auditor can link your choice back to your account.'
     },
     {
       q: 'Why is there no downloadable vote receipt showing my candidate choice?',

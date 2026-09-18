@@ -8,7 +8,6 @@ import ErrorState from '../../components/common/ErrorState';
 import { 
   Vote, 
   Search, 
-  Filter, 
   Calendar, 
   Building2, 
   ShieldCheck, 
@@ -16,12 +15,12 @@ import {
   AlertCircle, 
   Clock, 
   ArrowRight, 
-  Award, 
   Check, 
-  ExternalLink,
-  RefreshCw,
-  Lock,
-  Layers
+  RefreshCw, 
+  Lock, 
+  Eye, 
+  BarChart3,
+  HelpCircle
 } from 'lucide-react';
 
 export default function AvailableElections() {
@@ -32,23 +31,21 @@ export default function AvailableElections() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL', 'LIVE', 'UPCOMING', 'COMPLETED'
   const [eligibilityFilter, setEligibilityFilter] = useState('ALL'); // 'ALL', 'ELIGIBLE', 'INELIGIBLE'
 
   const fetchAvailableElections = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch voter overview which inspects eligible voter rosters for this user
       const data = await electionApi.getVoterOverview();
-      const list = Array.isArray(data) ? data : (data?.results || []);
+      const list = Array.isArray(data) ? data : (data?.elections || data?.results || []);
       setElections(list);
     } catch (err) {
       console.error('Failed to load available elections:', err);
-      // Attempt fallback to eligible list
       try {
         const fallback = await electionApi.getVoterEligibleElections();
-        const rawList = fallback?.elections || [];
+        const rawList = Array.isArray(fallback) ? fallback : (fallback?.elections || fallback?.results || []);
         const mapped = rawList.map(e => ({
           ...e,
           is_eligible: true,
@@ -68,7 +65,6 @@ export default function AvailableElections() {
   }, []);
 
   const filteredElections = elections.filter((election) => {
-    // Search query filter
     const query = searchQuery.toLowerCase().trim();
     const matchesQuery = !query || 
       (election.title || '').toLowerCase().includes(query) ||
@@ -76,20 +72,16 @@ export default function AvailableElections() {
       (election.position_category || '').toLowerCase().includes(query) ||
       (election.description || '').toLowerCase().includes(query);
 
-    // Status filter
     const status = (election.status || '').toLowerCase();
     let matchesStatus = true;
     if (statusFilter === 'LIVE') {
       matchesStatus = status === 'active' || status === 'live';
-    } else if (statusFilter === 'SCHEDULED') {
-      matchesStatus = status === 'scheduled';
+    } else if (statusFilter === 'UPCOMING') {
+      matchesStatus = status === 'scheduled' || status === 'configured';
     } else if (statusFilter === 'COMPLETED') {
       matchesStatus = status === 'completed';
-    } else if (statusFilter === 'PAUSED') {
-      matchesStatus = status === 'paused';
     }
 
-    // Eligibility filter
     let matchesEligibility = true;
     if (eligibilityFilter === 'ELIGIBLE') {
       matchesEligibility = Boolean(election.is_eligible);
@@ -104,21 +96,35 @@ export default function AvailableElections() {
   const totalLive = elections.filter(e => ['active', 'live'].includes((e.status || '').toLowerCase())).length;
   const totalVoted = elections.filter(e => e.already_voted).length;
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-6 pb-16 font-sans">
+      
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight">
               Available Elections
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-              Voter Roster Check
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-[#1a4231]/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 uppercase">
+              Roster Discovery
             </span>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Browse published elections. You can participate and cast your ballot only if your email exists on the creator-uploaded roster.
+          <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1">
+            Browse published elections across your institution. Ballots can be submitted only if your registered email is authorized on the official roster.
           </p>
         </div>
 
@@ -126,81 +132,86 @@ export default function AvailableElections() {
           type="button"
           onClick={fetchAvailableElections}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-[#171a20] border border-stone-300 dark:border-[#262a33] text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#101216] shadow-xs transition-colors self-start sm:self-auto cursor-pointer"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-500' : 'text-slate-400'}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : 'text-stone-400'}`} />
           <span>Refresh</span>
         </button>
       </div>
 
       {/* Metric Highlights */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Published Elections</span>
-          <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{elections.length}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs">
+          <span className="text-xs text-stone-500 font-medium">Published elections</span>
+          <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1">{elections.length}</p>
         </div>
-        <div className="p-4 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Eligible To Vote</span>
-          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{totalEligible}</p>
+        <div className="p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs">
+          <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Eligible to vote</span>
+          <p className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{totalEligible}</p>
         </div>
-        <div className="p-4 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Active Right Now</span>
-          <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{totalLive}</p>
+        <div className="p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs">
+          <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">Active now</span>
+          <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1">{totalLive}</p>
         </div>
-        <div className="p-4 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Ballots Cast</span>
-          <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{totalVoted}</p>
+        <div className="p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs">
+          <span className="text-xs text-stone-500 font-medium">Ballots cast</span>
+          <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1">{totalVoted}</p>
         </div>
       </div>
 
       {/* Filter and Search Controls */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-[#0d1527] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+      <div className="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-[#171a20] border border-stone-200 dark:border-[#262a33] shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
             <input
               type="text"
-              placeholder="Search by election name, organization, or category..."
+              placeholder="Search by election title, organization, or department..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+              className="w-full pl-10 pr-4 py-2 rounded-lg text-xs bg-stone-50 dark:bg-[#101216] border border-stone-200 dark:border-[#262a33] focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 text-stone-900 dark:text-stone-100 transition-all font-sans"
             />
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
-            {/* Status Filter */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
-              {['ALL', 'LIVE', 'SCHEDULED', 'COMPLETED'].map((tab) => (
+            {/* Status Filter: All, Live, Upcoming, Completed */}
+            <div className="flex items-center gap-1 bg-stone-100 dark:bg-[#101216] p-1 rounded-lg border border-stone-200 dark:border-[#262a33] text-xs">
+              {[
+                { id: 'ALL', label: 'All' },
+                { id: 'LIVE', label: 'Live' },
+                { id: 'UPCOMING', label: 'Upcoming' },
+                { id: 'COMPLETED', label: 'Completed' }
+              ].map((tab) => (
                 <button
-                  key={tab}
+                  key={tab.id}
                   type="button"
-                  onClick={() => setStatusFilter(tab)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                    statusFilter === tab
-                      ? 'bg-white dark:bg-[#0d1527] text-indigo-600 dark:text-indigo-400 shadow-sm font-bold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                    statusFilter === tab.id
+                      ? 'bg-white dark:bg-[#171a20] text-emerald-800 dark:text-emerald-300 shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
-                  {tab === 'ALL' ? 'All Status' : tab}
+                  {tab.label}
                 </button>
               ))}
             </div>
 
             {/* Eligibility Filter */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+            <div className="flex items-center gap-1 bg-stone-100 dark:bg-[#101216] p-1 rounded-lg border border-stone-200 dark:border-[#262a33] text-xs">
               {[
-                { id: 'ALL', label: 'All' },
-                { id: 'ELIGIBLE', label: 'Eligible Only' },
+                { id: 'ALL', label: 'All rosters' },
+                { id: 'ELIGIBLE', label: 'Eligible only' },
                 { id: 'INELIGIBLE', label: 'Ineligible' }
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setEligibilityFilter(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-lg font-medium transition-all ${
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                     eligibilityFilter === tab.id
-                      ? 'bg-white dark:bg-[#0d1527] text-emerald-600 dark:text-emerald-400 shadow-sm font-bold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white dark:bg-[#171a20] text-emerald-800 dark:text-emerald-300 shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
                   {tab.label}
@@ -226,57 +237,53 @@ export default function AvailableElections() {
         />
       )}
 
-      {/* Election Cards Grid */}
+      {/* Empty State */}
       {!loading && !error && filteredElections.length === 0 && (
-        <div className="text-center py-16 px-4 rounded-3xl bg-white dark:bg-[#0d1527] border border-dashed border-slate-300 dark:border-slate-800">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4">
-            <Vote className="w-7 h-7" />
+        <div className="text-center py-16 px-4 rounded-xl bg-white dark:bg-[#171a20] border border-dashed border-stone-300 dark:border-[#262a33]">
+          <div className="w-12 h-12 rounded-xl bg-[#1a4231]/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+            <Vote className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+          <h3 className="font-serif text-base font-bold text-stone-900 dark:text-white">
             No Elections Found
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
+          <p className="text-xs text-stone-500 dark:text-stone-400 max-w-sm mx-auto mt-1">
             {searchQuery || statusFilter !== 'ALL' || eligibilityFilter !== 'ALL'
-              ? 'Try changing your search terms or filter criteria.'
+              ? 'Try changing your search terms or filter selection.'
               : 'There are no published elections available on the platform at this time.'}
           </p>
         </div>
       )}
 
+      {/* Election Cards Grid */}
       {!loading && !error && filteredElections.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filteredElections.map((election) => {
             const isLive = ['active', 'live'].includes((election.status || '').toLowerCase());
-            const isScheduled = (election.status || '').toLowerCase() === 'scheduled';
+            const isUpcoming = ['scheduled', 'configured'].includes((election.status || '').toLowerCase());
             const isCompleted = (election.status || '').toLowerCase() === 'completed';
             const isEligible = Boolean(election.is_eligible);
             const hasVoted = Boolean(election.already_voted);
-            const verificationStatus = election.verification_status;
-            const isVerified = verificationStatus === 'verified';
 
             return (
               <div 
                 key={election.id}
-                className={`p-6 rounded-2xl bg-white dark:bg-[#0d1527] border transition-all flex flex-col justify-between gap-6 shadow-sm hover:shadow-md ${
-                  isEligible 
-                    ? 'border-indigo-100 dark:border-indigo-950/60 ring-1 ring-indigo-500/10' 
-                    : 'border-slate-200 dark:border-slate-800 opacity-90'
+                className={`p-5 sm:p-6 rounded-xl bg-white dark:bg-[#171a20] border transition-all flex flex-col justify-between gap-5 shadow-xs ${
+                  isLive 
+                    ? 'border-emerald-600/40 dark:border-emerald-500/30' 
+                    : isUpcoming
+                    ? 'border-amber-600/30 dark:border-amber-500/20'
+                    : 'border-stone-200 dark:border-[#262a33]'
                 }`}
               >
-                <div className="space-y-4">
-                  {/* Card Header Badges */}
+                <div className="space-y-3">
+                  {/* Badges */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={election.status || 'scheduled'} />
                       {election.organization && (
-                        <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                          <Building2 className="w-3 h-3 text-slate-400" />
+                        <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-stone-100 dark:bg-[#101216] text-stone-700 dark:text-stone-300">
+                          <Building2 className="w-3 h-3 text-stone-400" />
                           {election.organization}
-                        </span>
-                      )}
-                      {election.position_category && (
-                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
-                          {election.position_category}
                         </span>
                       )}
                     </div>
@@ -284,14 +291,14 @@ export default function AvailableElections() {
                     {/* Eligibility Badge */}
                     <div>
                       {isEligible ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Eligible Voter
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-[#1a4231]/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Eligible
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-[#101216] px-2 py-0.5 rounded">
                           <Lock className="w-3 h-3" />
-                          Not in Voter Roster
+                          Not on roster
                         </span>
                       )}
                     </div>
@@ -299,102 +306,108 @@ export default function AvailableElections() {
 
                   {/* Title & Description */}
                   <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
+                    <h3 className="font-serif text-base font-bold text-stone-900 dark:text-white leading-snug">
                       {election.title}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                    <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2 mt-1 leading-relaxed">
                       {election.description || 'No detailed instructions provided.'}
                     </p>
                   </div>
 
-                  {/* Period & Verification Metadata */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  {/* Period Metadata */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t border-stone-100 dark:border-[#262a33]">
+                    <div className="flex items-center gap-2 text-stone-600 dark:text-stone-400">
+                      <Calendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                       <span className="truncate">
-                        {election.start_datetime ? new Date(election.start_datetime).toLocaleDateString() : 'TBD'} – {election.end_datetime ? new Date(election.end_datetime).toLocaleDateString() : 'TBD'}
+                        {formatDate(election.start_datetime)} – {formatDate(election.end_datetime)}
                       </span>
                     </div>
 
-                    {/* User Voting Status */}
                     <div className="flex items-center gap-2">
                       {hasVoted ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                           <Check className="w-3.5 h-3.5" />
-                          Ballot Cast
+                          Ballot cast
                         </span>
-                      ) : isEligible && isVerified ? (
-                        <span className="text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          Identity Verified
+                      ) : isLive && isEligible ? (
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Voting open
                         </span>
-                      ) : isEligible ? (
-                        <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          Verification Required
+                      ) : isUpcoming ? (
+                        <span className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          Pending start
                         </span>
+                      ) : isCompleted ? (
+                        <span className="text-stone-500 font-medium">Concluded</span>
                       ) : (
-                        <span className="text-slate-400 italic">Participation locked</span>
+                        <span className="text-stone-400 italic text-[11px]">Not on roster</span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Card Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
-                  <span className="text-[11px] text-slate-400 font-mono">
+                {/* Card Action Bar */}
+                <div className="pt-3 border-t border-stone-100 dark:border-[#262a33] flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-stone-400 font-mono">
                     ID: {election.id.slice(0, 8)}...
                   </span>
 
                   <div className="flex items-center gap-2">
-                    {/* Results link if completed */}
-                    {isCompleted && (
-                      <Link
-                        to={`/results?electionId=${election.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
-                      >
-                        <Award className="w-3.5 h-3.5" />
-                        <span>Results</span>
-                      </Link>
-                    )}
-
-                    {/* Participation / Vote Button */}
-                    {isEligible && !hasVoted && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/elections/${election.id}/participate`)}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                          isLive
-                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
-                            : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-                        }`}
-                      >
-                        <span>{isLive ? 'Participate & Vote' : 'Verify Identity'}</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-
-                    {/* Already Voted Badge */}
-                    {isEligible && hasVoted && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/50">
-                        <Check className="w-3.5 h-3.5" />
-                        Voted
-                      </span>
-                    )}
-
-                    {/* Ineligible Explanation */}
-                    {!isEligible && (
-                      <span className="text-[11px] text-slate-400 italic">
-                        Not eligible to vote
-                      </span>
+                    {/* CASE: Completed Election -> Strictly Read-Only View */}
+                    {isCompleted ? (
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/election/${election.id}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-stone-300 dark:border-[#262a33] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#101216]"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-stone-400" />
+                          <span>View election</span>
+                        </Link>
+                        <Link
+                          to={`/elections/${election.id}/results`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 dark:bg-[#101216] text-stone-800 dark:text-stone-200 hover:bg-stone-200 dark:hover:bg-stone-800"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5" />
+                          <span>Results</span>
+                        </Link>
+                      </div>
+                    ) : (
+                      /* CASE: Live or Upcoming Election -> Enter Election */
+                      <div className="flex items-center gap-2">
+                        {hasVoted ? (
+                          <Link
+                            to="/voting-history"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-[#1a4231]/40 border border-emerald-200 dark:border-emerald-800/60"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Receipt</span>
+                          </Link>
+                        ) : (
+                          <Link
+                            to={`/election/${election.id}`}
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              isLive && isEligible
+                                ? 'bg-[#1a4231] hover:bg-[#1f4f3b] text-white shadow-xs'
+                                : 'bg-stone-100 dark:bg-[#101216] text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-[#262a33] hover:bg-stone-200 dark:hover:bg-stone-800'
+                            }`}
+                          >
+                            <span>Enter election</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
+
               </div>
             );
           })}
         </div>
       )}
+
     </div>
   );
 }
